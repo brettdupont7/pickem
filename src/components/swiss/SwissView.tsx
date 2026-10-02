@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ComputedStage } from '../../engine'
 import { useTeams } from '../common/preview'
 import type { Match, Stage, SwissConfig, TeamId } from '../../types'
@@ -22,6 +22,9 @@ interface Arrow {
 }
 
 const keyOf = (wins: number, losses: number) => `${wins}-${losses}`
+
+/** How far above/below a cell's middle its win and loss arrows leave and arrive. */
+const ARROW_SPREAD = 10
 
 /**
  * Every record a team can hold, laid out by games played: column c holds
@@ -69,6 +72,8 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
   const seeds = computed.seeds ?? []
   const columns = buildColumns(seeds.length, config.winsToAdvance, config.lossesToEliminate)
 
+  // Marker IDs must be unique on the page, which can show several Swiss stages (designer previews).
+  const markerId = `swiss-arrow-${useId().replace(/:/g, '')}`
   const container = useRef<HTMLDivElement>(null)
   const cellRefs = useRef(new Map<string, HTMLElement>())
   const [arrows, setArrows] = useState<Arrow[]>([])
@@ -93,23 +98,28 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
         const r = el.getBoundingClientRect()
         return { left: r.left - origin.left, right: r.right - origin.left, top: r.top - origin.top, mid: r.top - origin.top + r.height / 2 }
       }
+      const active = new Set(columns.flat().filter((c) => c.kind === 'active').map((c) => c.key))
       const next: Arrow[] = []
       for (const column of columns) {
         for (const cell of column) {
           if (cell.kind !== 'active') continue
           const from = box(cell.key)
           if (!from) continue
-          for (const [kind, target, offset] of [
-            ['win', keyOf(cell.wins + 1, cell.losses), -10],
-            ['loss', keyOf(cell.wins, cell.losses + 1), 10],
+          // Higher records sit higher, so a win goes up and a loss goes down.
+          // A cell reached both ways gets its loss arrow (from the cell above)
+          // just above its middle and its win arrow just below, so they never
+          // cross or land on each other.
+          for (const [kind, wins, losses, out] of [
+            ['win', cell.wins + 1, cell.losses, -ARROW_SPREAD],
+            ['loss', cell.wins, cell.losses + 1, ARROW_SPREAD],
           ] as const) {
-            const to = box(target)
+            const to = box(keyOf(wins, losses))
             if (!to) continue
+            const reachedBoth = active.has(keyOf(wins - 1, losses)) && active.has(keyOf(wins, losses - 1))
             const x1 = from.right + 4
-            const y1 = from.mid + offset
+            const y1 = from.mid + out
             const x2 = to.left - 8
-            // Aim at the target's title so arrows land on the record label.
-            const y2 = Math.min(to.mid, to.top + 14)
+            const y2 = to.mid + (reachedBoth ? -out : 0)
             const dx = (x2 - x1) / 2
             next.push({ kind, d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}` })
           }
@@ -195,13 +205,13 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
       <svg className="swiss-web__arrows" width={size.width} height={size.height} aria-hidden>
         <defs>
           {(['win', 'loss'] as const).map((kind) => (
-            <marker key={kind} id={`arrow-${kind}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <marker key={kind} id={`${markerId}-${kind}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0,0 L10,5 L0,10 z" className={`arrowhead arrowhead--${kind}`} />
             </marker>
           ))}
         </defs>
         {arrows.map((a, i) => (
-          <path key={i} d={a.d} className={`arrow arrow--${a.kind}`} markerEnd={`url(#arrow-${a.kind})`} />
+          <path key={i} d={a.d} className={`arrow arrow--${a.kind}`} markerEnd={`url(#${markerId}-${a.kind})`} />
         ))}
       </svg>
       {columns.map((column, c) => (

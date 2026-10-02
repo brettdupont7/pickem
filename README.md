@@ -55,7 +55,7 @@ Teams in the presets are placeholders. To rename them all at once, paste a list 
 
 - **Bracket:** one tab per stage, each with a status badge (Waiting, In progress, Done).
   - **Swiss stages** use the HLTV-style web. Records branch out from 0:0, green and red arrows show where winners and losers go, and advanced and eliminated teams collect in boxes along the top and bottom. Rounds not reached yet show placeholders.
-  - **Elimination stages** show the bracket by round. Double elimination shows the upper and lower brackets separately. Once a match is decided, a mark next to each team's score shows where it goes: a green **→** if it plays on (to its next match, or to a later stage once its place is certain), a red **↓** if it drops to the lower bracket or the 3rd place match, and nothing if it's out. Hover a mark for details. Once a stage is done, **Final placings** lists every team's place and which later stage it goes to.
+  - **Elimination stages** show the bracket by round, with lines from each match to the one its winner plays next. The lines turn green once the winner is decided. Double elimination shows the upper and lower brackets separately, with the grand final to the right of both. Reseeded rounds have no lines, since opponents aren't fixed in advance. Once a match is decided, a mark next to each team's score shows where it goes: a green **→** if it plays on (to its next match, or to a later stage once its place is certain), a red **↓** if it drops to the lower bracket or the 3rd place match, and nothing if it's out. Hover a mark for details. Once a stage is done, **Final placings** lists every team's place and which later stage it goes to.
   - **Waiting stages** list their entrants, e.g. "3rd in Stage 1".
 - **Odds:** runs 2,000 simulations of the rest of the event. For each team it shows the chance of advancing from each stage, and of winning the last one. Your picks and actual results are kept fixed, so the odds reflect them.
 - **Teams:** add, remove and edit teams: name, short name, logo URL and rating. The short name or logo is shown in the Swiss grid (initials are used when blank). Ratings drive the simulator; blank means 1500. **Paste team names…** takes one name per line and either renames the existing teams in order or adds them as new teams.
@@ -151,5 +151,4 @@ The engine recomputes every stage from the tournament definition plus the record
 ## Current limitations
 
 - The designer is a form, not a visual graph: stages are linked by choosing places, not by dragging connections.
-- Elimination brackets don't have connector lines between rounds.
 - Data is stored only in your browser. There are no accounts or live sharing, but tournaments can be exported and imported as files.

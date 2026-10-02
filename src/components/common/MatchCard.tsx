@@ -30,11 +30,19 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
   const pickWinner = useTournamentStore((s) => s.pickWinner)
   const openEditor = useUiStore((s) => s.openEditor)
 
-  // A match between two byes never happens; keep its space so the bracket lines up.
-  if (match.slots.every((s) => s.isBye)) return <div className="match match--empty" aria-hidden />
+  // A match between two byes never happens. Keep a full-size invisible card
+  // so every match in a round is the same height and the bracket lines up.
+  if (match.slots.every((s) => s.isBye))
+    return (
+      <div className="match match--empty" aria-hidden>
+        <div className="match__header">&nbsp;</div>
+        <span className="match__team">&nbsp;</span>
+        <span className="match__team">&nbsp;</span>
+      </div>
+    )
 
   const view = describeMatch(match, scoring)
-  const editable = !preview && view.status === 'ready' || view.status === 'live' || view.status === 'decided'
+  const editable = !preview && (view.status === 'ready' || view.status === 'live' || view.status === 'decided')
   const singleGameScore = match.bestOf === 1 ? view.games[0]?.score : undefined
 
   const scoreFor = (slot: 0 | 1) => {

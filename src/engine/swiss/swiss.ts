@@ -1,0 +1,322 @@
+import type { BestOf, GameScoring, Match, MatchId, MatchReport, SwissConfig, SwissStanding, TeamId } from '../../types'
+import { createRng, shuffle } from '../random'
+import { resolveReport } from '../results'
+
+export type SwissTeamStatus = 'active' | 'advanced' | 'eliminated'
+
+export interface SwissInput {
+  /** Team IDs in seed order (index 0 = top seed). */
+  seeds: TeamId[]
+  config: SwissConfig
+  /** Results keyed by match ID. Results for matches that aren't generated are ignored. */
+  results: Record<MatchId, MatchReport>
+  /** Seed for random pairings and tiebreakers, so replays are stable. */
+  randomSeed?: number
+  /** How game scores are judged. Default free scoring. */
+  scoring?: GameScoring
+}
+
+export interface SwissState {
+  /** Generated rounds. The last one may still be missing results. */
+  rounds: Match[][]
+  standings: Record<TeamId, SwissStanding>
+  status: Record<TeamId, SwissTeamStatus>
+  /** Every team ranked best to worst (index 0 = place 1). Final once `complete`. */
+  ranking: TeamId[]
+  complete: boolean
+}
+
+interface TeamRecord {
+  wins: number
+  losses: number
+  opponents: TeamId[]
+  beat: Set<TeamId>
+  byes: number
+}
+
+type Pair = [TeamId, TeamId]
+
+/**
+ * Swiss match IDs come from the pair of teams, not the round, so a result
+ * still applies if an earlier change moves that pairing to another round.
+ */
+export function swissMatchId(a: TeamId, b: TeamId, meeting = 1): MatchId {
+  const id = [a, b].sort().join('|')
+  return meeting > 1 ? `${id}#${meeting}` : id
+}
+
+const byeMatchId = (teamId: TeamId, round: number): MatchId => `bye:${round}:${teamId}`
+
+/**
+ * Replays a Swiss stage from its results. Each round is paired from the
+ * standings after the previous one, so the whole stage is derived from
+ * `seeds`, `config` and `results` alone. Generation stops at the first
+ * round that has a match without a result.
+ */
+export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring }: SwissInput): SwissState {
+  validate(seeds, config)
+  const { winsToAdvance, lossesToEliminate } = config
+
+  const seedOf = new Map(seeds.map((id, i) => [id, i]))
+  const tieRng = createRng(randomSeed)
+  const tieValue = new Map(seeds.map((id) => [id, tieRng()]))
+  const records = new Map<TeamId, TeamRecord>(
+    seeds.map((id) => [id, { wins: 0, losses: 0, opponents: [], beat: new Set(), byes: 0 }]),
+  )
+  const meetings = new Map<string, number>()
+
+  const rec = (id: TeamId) => records.get(id)!
+  const seed = (id: TeamId) => seedOf.get(id)!
+  const statusOf = (id: TeamId): SwissTeamStatus =>
+    rec(id).wins >= winsToAdvance ? 'advanced' : rec(id).losses >= lossesToEliminate ? 'eliminated' : 'active'
+  /** Sum of opponents' win-loss differentials, as used for CS2 Majors. */
+  const buchholz = (id: TeamId) =>
+    rec(id).opponents.reduce((sum, opp) => sum + rec(opp).wins - rec(opp).losses, 0)
+  const played = (a: TeamId, b: TeamId) => rec(a).opponents.includes(b)
+
+  const statusOrder: Record<SwissTeamStatus, number> = { advanced: 0, active: 1, eliminated: 2 }
+  const compareRank = (a: TeamId, b: TeamId): number => {
+    const ra = rec(a)
+    const rb = rec(b)
+    const byStatus = statusOrder[statusOf(a)] - statusOrder[statusOf(b)]
+    if (byStatus) return byStatus
+    const byDiff = rb.wins - rb.losses - (ra.wins - ra.losses)
+    if (byDiff) return byDiff
+    const byWins = rb.wins - ra.wins
+    if (byWins) return byWins
+    for (const tiebreaker of config.tiebreakers) {
+      let d = 0
+      if (tiebreaker === 'buchholz') d = buchholz(b) - buchholz(a)
+      else if (tiebreaker === 'seed') d = seed(a) - seed(b)
+      else if (tiebreaker === 'random') d = tieValue.get(a)! - tieValue.get(b)!
+      else if (tiebreaker === 'head-to-head') d = Number(rb.beat.has(a)) - Number(ra.beat.has(b))
+      if (d) return d
+    }
+    return seed(a) - seed(b)
+  }
+
+  const bestOfFor = (a: TeamId, b: TeamId): BestOf => {
+    const canAdvance = [a, b].some((id) => rec(id).wins === winsToAdvance - 1)
+    const canBeEliminated = [a, b].some((id) => rec(id).losses === lossesToEliminate - 1)
+    let bestOf = config.bestOf
+    if (canAdvance && config.advancementBestOf) bestOf = Math.max(bestOf, config.advancementBestOf) as BestOf
+    if (canBeEliminated && config.eliminationBestOf) bestOf = Math.max(bestOf, config.eliminationBestOf) as BestOf
+    return bestOf
+  }
+
+  const recordLabel = (id: TeamId) => `${rec(id).wins}-${rec(id).losses}`
+
+  const rounds: Match[][] = []
+  // Each round every active team gains a win or a loss, so this bounds the stage.
+  const maxRounds = winsToAdvance + lossesToEliminate - 1
+
+  for (let round = 0; round < maxRounds; round++) {
+    let active = seeds.filter((id) => statusOf(id) === 'active')
+    if (active.length === 0) break
+
+    const matches: Match[] = []
+
+    if (active.length % 2 === 1) {
+      // The lowest-ranked team that hasn't had a bye sits out and takes a win.
+      const ranked = [...active].sort(compareRank).reverse()
+      const byeTeam = ranked.find((id) => rec(id).byes === 0) ?? ranked[0]
+      active = active.filter((id) => id !== byeTeam)
+      matches.push({
+        id: byeMatchId(byeTeam, round),
+        side: 'swiss',
+        round,
+        label: recordLabel(byeTeam),
+        bestOf: config.bestOf,
+        slots: [{ teamId: byeTeam }, { teamId: null }],
+        result: { winnerId: byeTeam, source: 'bye' },
+      })
+    }
+
+    const roundRng = createRng(randomSeed + (round + 1) * 0x9e3779b9)
+    const pairs =
+      round === 0
+        ? pairFirstRound(active, config, roundRng)
+        : pairByRecord(active, config, {
+            rec,
+            seed,
+            buchholz,
+            played: config.avoidRematches ? played : () => false,
+            rng: roundRng,
+          })
+
+    for (const [a, b] of pairs) {
+      const key = swissMatchId(a, b)
+      const meeting = (meetings.get(key) ?? 0) + 1
+      const id = swissMatchId(a, b, meeting)
+      const bestOf = bestOfFor(a, b)
+      const labelA = recordLabel(a)
+      const labelB = recordLabel(b)
+      matches.push({
+        id,
+        side: 'swiss',
+        round,
+        label: labelA === labelB ? labelA : `${labelA} v ${labelB}`,
+        bestOf,
+        slots: [{ teamId: a }, { teamId: b }],
+        ...resolveReport(results[id], a, b, bestOf, scoring),
+      })
+    }
+
+    rounds.push(matches)
+    if (matches.some((m) => !m.result)) break
+
+    for (const match of matches) {
+      const [a, b] = match.slots.map((s) => s.teamId)
+      const winner = match.result!.winnerId
+      if (b === null) {
+        rec(a!).wins++
+        rec(a!).byes++
+        continue
+      }
+      const loser = winner === a ? b : a!
+      rec(winner).wins++
+      rec(winner).beat.add(loser)
+      rec(loser).losses++
+      rec(winner).opponents.push(loser)
+      rec(loser).opponents.push(winner)
+      const key = swissMatchId(a!, b)
+      meetings.set(key, (meetings.get(key) ?? 0) + 1)
+    }
+  }
+
+  const standings: Record<TeamId, SwissStanding> = {}
+  const status: Record<TeamId, SwissTeamStatus> = {}
+  for (const id of seeds) {
+    const r = rec(id)
+    standings[id] = { teamId: id, wins: r.wins, losses: r.losses, opponents: [...r.opponents], buchholz: buchholz(id) }
+    status[id] = statusOf(id)
+  }
+
+  return {
+    rounds,
+    standings,
+    status,
+    ranking: [...seeds].sort(compareRank),
+    complete: seeds.every((id) => statusOf(id) !== 'active'),
+  }
+}
+
+function validate(seeds: TeamId[], config: SwissConfig) {
+  if (seeds.length < 2) throw new Error('Swiss stage needs at least 2 teams')
+  if (new Set(seeds).size !== seeds.length) throw new Error('Swiss stage has duplicate teams')
+  if (!Number.isInteger(config.winsToAdvance) || config.winsToAdvance < 1)
+    throw new Error('winsToAdvance must be a positive integer')
+  if (!Number.isInteger(config.lossesToEliminate) || config.lossesToEliminate < 1)
+    throw new Error('lossesToEliminate must be a positive integer')
+}
+
+/** `active` is in seed order and has an even length. */
+function pairFirstRound(active: TeamId[], config: SwissConfig, rng: () => number): Pair[] {
+  const n = active.length
+  const half = n / 2
+  const pairs: Pair[] = []
+  const { firstRoundPairing } = config
+  if (firstRoundPairing === 'high-low') {
+    for (let i = 0; i < half; i++) pairs.push([active[i], active[i + half]])
+  } else if (firstRoundPairing === 'fold') {
+    for (let i = 0; i < half; i++) pairs.push([active[i], active[n - 1 - i]])
+  } else {
+    const order = firstRoundPairing === 'random' ? shuffle(active, rng) : active
+    for (let i = 0; i < n; i += 2) pairs.push([order[i], order[i + 1]])
+  }
+  return pairs
+}
+
+interface PairingContext {
+  rec: (id: TeamId) => TeamRecord
+  seed: (id: TeamId) => number
+  buchholz: (id: TeamId) => number
+  played: (a: TeamId, b: TeamId) => boolean
+  rng: () => number
+}
+
+/**
+ * Pairs teams within the same W-L record, best record first. Within a
+ * group, the highest-ranked team plays the lowest-ranked one it hasn't met.
+ * When a group has an odd count, one team floats down to the next group.
+ * Rematches only happen when a group can't be paired any other way. Groups
+ * are paired one at a time, so on rare occasions a different pairing of a
+ * higher group would have spared a lower group a rematch.
+ */
+function pairByRecord(active: TeamId[], config: SwissConfig, ctx: PairingContext): Pair[] {
+  const groups = new Map<string, TeamId[]>()
+  for (const id of active) {
+    const { wins, losses } = ctx.rec(id)
+    const key = `${wins}-${losses}`
+    groups.set(key, [...(groups.get(key) ?? []), id])
+  }
+  const ordered = [...groups.values()].sort((x, y) => {
+    const a = ctx.rec(x[0])
+    const b = ctx.rec(y[0])
+    return b.wins - a.wins || a.losses - b.losses
+  })
+
+  const pairs: Pair[] = []
+  let floaters: TeamId[] = []
+  ordered.forEach((group, gi) => {
+    // Floaters come first so they meet the weakest team of the lower group.
+    const pool = [...floaters, ...sortGroup(group, config, ctx)]
+    const isLast = gi === ordered.length - 1
+    floaters = []
+
+    // Float as few teams as possible (lowest-ranked first) so the rest pair
+    // without rematches. The last group has nowhere to float to.
+    const minFloat = pool.length % 2
+    const maxFloat = isLast ? 0 : minFloat + 2
+    for (let float = minFloat; float <= maxFloat; float += 2) {
+      for (const floated of floatCandidates(pool, float)) {
+        const paired = pairUp(pool.filter((id) => !floated.includes(id)), ctx.played)
+        if (paired) {
+          pairs.push(...paired)
+          floaters = [...floated].reverse() // back to rank order
+          return
+        }
+      }
+    }
+
+    // No clean pairing: float the bottom team if needed and allow rematches.
+    floaters = minFloat ? [pool[pool.length - 1]] : []
+    pairs.push(...pairUp(pool.slice(0, pool.length - minFloat), () => false)!)
+  })
+  return pairs
+}
+
+/** Every way to pick `count` teams to float, lowest-ranked combinations first. */
+function floatCandidates(pool: TeamId[], count: number): TeamId[][] {
+  if (count === 0) return [[]]
+  const out: TeamId[][] = []
+  const pick = (start: number, chosen: TeamId[]) => {
+    if (chosen.length === count) return out.push(chosen)
+    for (let i = start; i >= 0; i--) pick(i - 1, [...chosen, pool[i]])
+  }
+  pick(pool.length - 1, [])
+  return out
+}
+
+function sortGroup(group: TeamId[], config: SwissConfig, ctx: PairingContext): TeamId[] {
+  switch (config.pairing) {
+    case 'buchholz':
+      return [...group].sort((a, b) => ctx.buchholz(b) - ctx.buchholz(a) || ctx.seed(a) - ctx.seed(b))
+    case 'seed':
+      return [...group].sort((a, b) => ctx.seed(a) - ctx.seed(b))
+    case 'random':
+      return shuffle(group, ctx.rng)
+  }
+}
+
+/** Pairs the first team with the last one it hasn't played, backtracking as needed. */
+function pairUp(ids: TeamId[], played: (a: TeamId, b: TeamId) => boolean): Pair[] | null {
+  if (ids.length === 0) return []
+  const [first, ...rest] = ids
+  for (let i = rest.length - 1; i >= 0; i--) {
+    if (played(first, rest[i])) continue
+    const sub = pairUp(rest.filter((_, j) => j !== i), played)
+    if (sub) return [[first, rest[i]], ...sub]
+  }
+  return null
+}

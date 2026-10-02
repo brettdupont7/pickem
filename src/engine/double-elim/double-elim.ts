@@ -2,6 +2,7 @@ import type { DoubleElimConfig } from '../../types'
 import {
   bestOfFromFinal,
   bracketSize,
+  finishedPlaces,
   firstRoundSlots,
   isComplete,
   rankBracket,
@@ -33,18 +34,23 @@ function upperLabel(roundsFromFinal: number, round: number, names?: string[]) {
  * - upper: k rounds
  * - lower: 2(k - 1) rounds. Even rounds pair lower-bracket survivors (round 0
  *   pairs upper round 0's losers); odd rounds bring in the losers of the
- *   next upper round, in reverse order to delay rematches.
- * - grand final: upper winner (slot 0) v lower winner (slot 1)
+ *   next upper round, in reverse order to delay rematches. When the upper
+ *   final decides 1st and 2nd, its loser doesn't drop, so the last round
+ *   (where it would join) is left out.
+ * - grand final, unless `finals` says otherwise: upper winner (slot 0) v
+ *   lower winner (slot 1)
  * The reset match isn't part of the structure; see `computeDoubleElim`.
  */
 export function buildDoubleElim(teamCount: number, config: DoubleElimConfig, randomSeed = 0): BracketNode[] {
   const size = bracketSize(teamCount)
+  const finals = config.finals ?? 'grand-final'
   const upperRounds = Math.log2(size)
-  const lowerRounds = 2 * (upperRounds - 1)
+  const lowerRounds = 2 * (upperRounds - 1) - (finals === 'upper-final-decides' ? 1 : 0)
   const slots = firstRoundSlots(teamCount, config.seeding, randomSeed)
   const nodes: BracketNode[] = []
 
-  // Upper losers always drop, so upper tiers are never used for ranking.
+  // Upper losers drop, so upper tiers only rank the upper final when its
+  // loser stays put. Lower round r's losers get tier r.
   for (let round = 0; round < upperRounds; round++) {
     const fromFinal = upperRounds - 1 - round
     const count = size / 2 ** (round + 1)
@@ -62,7 +68,7 @@ export function buildDoubleElim(teamCount: number, config: DoubleElimConfig, ran
                 { kind: 'winner', matchId: upperMatchId(round - 1, 2 * i) },
                 { kind: 'winner', matchId: upperMatchId(round - 1, 2 * i + 1) },
               ],
-        tier: 0,
+        ...(fromFinal === 0 ? upperFinalTiers(finals, lowerRounds) : { tier: 0 }),
       })
     }
   }
@@ -98,10 +104,13 @@ export function buildDoubleElim(teamCount: number, config: DoubleElimConfig, ran
         bestOf: bestOfFromFinal(config.bestOf, config.lowerBestOfFromFinal, fromFinal),
         sources,
         tier: round,
+        // Without a grand final, the lower winner finishes here: 2nd, or 3rd behind the upper finalists.
+        winnerTier: fromFinal === 0 && finals !== 'grand-final' ? lowerRounds : undefined,
       })
     }
   }
 
+  if (finals !== 'grand-final') return nodes
   nodes.push({
     id: GRAND_FINAL_ID,
     side: 'grand-final',
@@ -118,6 +127,18 @@ export function buildDoubleElim(teamCount: number, config: DoubleElimConfig, ran
   return nodes
 }
 
+/** Where the upper finalists place, when they don't meet again in a grand final. */
+function upperFinalTiers(finals: NonNullable<DoubleElimConfig['finals']>, lowerRounds: number): Pick<BracketNode, 'tier' | 'winnerTier'> {
+  switch (finals) {
+    case 'grand-final':
+      return { tier: 0 }
+    case 'no-grand-final':
+      return { tier: 0, winnerTier: lowerRounds + 1 }
+    case 'upper-final-decides':
+      return { tier: lowerRounds + 1, winnerTier: lowerRounds + 2 }
+  }
+}
+
 export function computeDoubleElim({ seeds, config, results, randomSeed = 0, scoring }: DoubleElimInput): EliminationState {
   validateSeeds(seeds, 3, 'Double elimination')
   const nodes = buildDoubleElim(seeds.length, config, randomSeed)
@@ -126,7 +147,7 @@ export function computeDoubleElim({ seeds, config, results, randomSeed = 0, scor
   // If the lower-bracket team wins the grand final, both teams have one
   // loss, so a reset series decides the title.
   const grandFinal = resolved.matches.at(-1)!
-  if (config.grandFinalReset && grandFinal.result && grandFinal.result.winnerId === grandFinal.slots[1].teamId) {
+  if (grandFinal.id === GRAND_FINAL_ID && config.grandFinalReset && grandFinal.result && grandFinal.result.winnerId === grandFinal.slots[1].teamId) {
     const gfNode = nodes.at(-1)!
     gfNode.winnerTier = undefined
     nodes.push({
@@ -148,6 +169,7 @@ export function computeDoubleElim({ seeds, config, results, randomSeed = 0, scor
   return {
     matches: resolved.matches,
     ranking: rankBracket(nodes, resolved, seeds),
+    places: finishedPlaces(nodes, resolved, seeds),
     complete: isComplete(resolved.matches),
   }
 }

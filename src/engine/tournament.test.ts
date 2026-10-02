@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cs2Major } from '../data/presets/cs2-major'
 import { nflPlayoffs } from '../data/presets/nfl-playoffs'
+import { groupsPlayoffs } from '../data/presets/groups-playoffs'
 import type { Tournament } from '../types'
 import { favouriteWins, playTournament, randomWinner } from './testing'
 import { simulate } from './simulator'
@@ -59,7 +60,7 @@ describe('computeTournament', () => {
     }
     const state = computeTournament(broken, {})
     expect(state.stages['stage-2'].status).toBe('invalid')
-    expect(state.stages['stage-2'].error).toMatch(/stage-1/)
+    expect(state.stages['stage-2'].error).toMatch(/Stage 1/)
   })
 
   it('marks a stage invalid when the engine rejects it', () => {
@@ -97,9 +98,9 @@ describe('validateTournament', () => {
     const messages = validateTournament(broken).map((i) => i.message)
     expect(messages).toEqual([
       'Unknown team "nobody"',
-      'Team "team-1" is also entered in "stage-1"',
-      'Place 1 of "stage-1" is also used by "stage-2"',
-      'Place 99 doesn\'t exist in "stage-1" (17 teams)',
+      'Team 1 is also entered in Stage 1',
+      'Place 1 of Stage 1 is also used by Stage 2',
+      'Place 99 doesn\'t exist in Stage 1 (17 teams)',
       'Draws from unknown stage "missing"',
     ])
   })
@@ -147,5 +148,19 @@ describe('validateTournament rules', () => {
       'Points to win a game must be at least 1',
       'Overtime must be first to at least 2',
     ])
+  })
+})
+
+describe('Groups + Playoffs preset', () => {
+  it('is valid and sends the top 3 of each group to the playoffs', () => {
+    expect(validateTournament(groupsPlayoffs)).toEqual([])
+    const order = Object.keys(groupsPlayoffs.teams)
+    const state = playTournament(groupsPlayoffs, favouriteWins(order))
+    expect(state.stages['group-a'].ranking.slice(0, 3)).toEqual(['a-1', 'a-2', 'a-3'])
+    expect(state.stages.playoffs.seeds).toEqual(['a-1', 'b-1', 'a-2', 'b-2', 'a-3', 'b-3'])
+    // Group winners have byes into the semi-finals.
+    const byes = state.stages.playoffs.matches.filter((m) => m.result?.source === 'bye')
+    expect(byes.map((m) => m.result!.winnerId)).toEqual(['a-1', 'b-1'])
+    expect(state.stages.playoffs.status).toBe('complete')
   })
 })

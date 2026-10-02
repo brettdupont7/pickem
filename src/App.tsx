@@ -4,20 +4,22 @@ import { StageView } from './components/common/StageView'
 import { TeamsPanel } from './components/common/TeamsPanel'
 import { OddsPanel } from './components/simulator/OddsPanel'
 import { SimulatorBar } from './components/simulator/SimulatorBar'
-import { presets } from './data/presets'
+import { DesignPanel } from './components/design/DesignPanel'
 import { playOrder } from './engine'
 import { useTournamentState, useTournamentStore } from './store/tournament'
 import { useUiStore, type View } from './store/ui'
 
 const STATUS_LABEL = { waiting: 'Waiting', 'in-progress': 'In progress', complete: 'Done', invalid: 'Invalid' }
+const VIEW_LABEL: Record<View, string> = { stages: 'Bracket', odds: 'Odds', teams: 'Teams', design: 'Design' }
 
 export default function App() {
   const tournament = useTournamentStore((s) => s.tournament)
-  const loadTournament = useTournamentStore((s) => s.loadTournament)
+  const library = useTournamentStore((s) => s.library)
+  const openTournament = useTournamentStore((s) => s.openTournament)
   const editSource = useTournamentStore((s) => s.editSource)
   const setEditSource = useTournamentStore((s) => s.setEditSource)
   const state = useTournamentState()
-  const { view, setView, activeStageId, setActiveStage } = useUiStore()
+  const { view, setView, activeStageId, setActiveStage, closeEditor } = useUiStore()
 
   const stages = playOrder(tournament.stages)
   const active = stages.find((s) => s.id === activeStageId) ?? stages[0]
@@ -29,26 +31,28 @@ export default function App() {
     if (current) setActiveStage(current.id)
   }, [tournament.id, activeStageId, stages, state, setActiveStage])
 
-  const loadPreset = (id: string) => {
-    const preset = presets.find((p) => p.id === id)
-    if (!preset) return
-    if (preset.tournament.id !== tournament.id && !window.confirm(`Load ${preset.name}? This clears your current results.`)) return
-    loadTournament(preset.tournament)
-    const first = playOrder(preset.tournament.stages)[0]
-    if (first) setActiveStage(first.id)
+  const others = Object.values(library)
+    .map((e) => e.tournament)
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  const switchTo = (id: string) => {
+    if (id === '__manage') return setView('design')
+    closeEditor()
+    openTournament(id)
   }
 
   return (
     <div className="app">
       <header className="app__header">
         <h1>{tournament.name}</h1>
-        <select value={presets.some((p) => p.id === tournament.id) ? tournament.id : ''} onChange={(e) => loadPreset(e.target.value)} aria-label="Preset">
-          {!presets.some((p) => p.id === tournament.id) && <option value="">Custom</option>}
-          {presets.map((p) => (
-            <option key={p.id} value={p.id} title={p.description}>
-              {p.name}
+        <select value={tournament.id} onChange={(e) => switchTo(e.target.value)} aria-label="Tournament">
+          <option value={tournament.id}>{tournament.name}</option>
+          {others.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
             </option>
           ))}
+          <option value="__manage">New or manage…</option>
         </select>
         <div className="segmented" role="group" aria-label="Record edits as">
           {(['pick', 'actual'] as const).map((source) => (
@@ -58,9 +62,9 @@ export default function App() {
           ))}
         </div>
         <nav className="segmented" aria-label="View">
-          {(['stages', 'odds', 'teams'] as View[]).map((v) => (
+          {(Object.keys(VIEW_LABEL) as View[]).map((v) => (
             <button key={v} className={view === v ? 'is-active' : ''} onClick={() => setView(v)}>
-              {v === 'stages' ? 'Bracket' : v === 'odds' ? 'Odds' : 'Teams'}
+              {VIEW_LABEL[v]}
             </button>
           ))}
         </nav>
@@ -84,11 +88,19 @@ export default function App() {
               )
             })}
           </nav>
-          <main className="stage">{active && <StageView stage={active} computed={state.stages[active.id]} />}</main>
+          <main className="stage">
+            {active ? (
+              <StageView stage={active} computed={state.stages[active.id]} />
+            ) : (
+              <p className="hint">This tournament has no stages yet. Add some in the Design tab.</p>
+            )}
+          </main>
         </>
       )}
       {view === 'odds' && <OddsPanel />}
       {view === 'teams' && <TeamsPanel />}
+      {/* Keyed so expanded stage cards reset when another tournament opens. */}
+      {view === 'design' && <DesignPanel key={tournament.id} />}
 
       <MatchEditor stages={state.stages} />
     </div>

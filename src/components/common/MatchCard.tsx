@@ -2,11 +2,20 @@ import { describeMatch } from '../../engine'
 import { useTournamentStore } from '../../store/tournament'
 import { useUiStore } from '../../store/ui'
 import type { Match, StageId } from '../../types'
+import { useIsPreview, useTeams } from './preview'
 import { TeamBadge } from './TeamBadge'
+
+/** Where a team goes after a decided match: on (→) or down to the lower bracket (↓). */
+export interface Advance {
+  direction: 'on' | 'down'
+  title: string
+}
 
 interface Props {
   stageId: StageId
   match: Match
+  /** Brackets only: where each team goes next. Nothing is shown for teams that are out. */
+  advance?: (slot: 0 | 1) => Advance | null
   /**
    * stacked: one team per line (brackets).
    * row: "A vs B" on one line with team badges (Swiss grid).
@@ -14,8 +23,9 @@ interface Props {
   variant?: 'stacked' | 'row'
 }
 
-export function MatchCard({ stageId, match, variant = 'stacked' }: Props) {
-  const teams = useTournamentStore((s) => s.tournament.teams)
+export function MatchCard({ stageId, match, variant = 'stacked', advance }: Props) {
+  const teams = useTeams()
+  const preview = useIsPreview()
   const scoring = useTournamentStore((s) => s.tournament.rules?.scoring)
   const pickWinner = useTournamentStore((s) => s.pickWinner)
   const openEditor = useUiStore((s) => s.openEditor)
@@ -24,7 +34,7 @@ export function MatchCard({ stageId, match, variant = 'stacked' }: Props) {
   if (match.slots.every((s) => s.isBye)) return <div className="match match--empty" aria-hidden />
 
   const view = describeMatch(match, scoring)
-  const editable = view.status === 'ready' || view.status === 'live' || view.status === 'decided'
+  const editable = !preview && view.status === 'ready' || view.status === 'live' || view.status === 'decided'
   const singleGameScore = match.bestOf === 1 ? view.games[0]?.score : undefined
 
   const scoreFor = (slot: 0 | 1) => {
@@ -53,6 +63,7 @@ export function MatchCard({ stageId, match, variant = 'stacked' }: Props) {
           <>
             <span className="match__name">{name}</span>
             {score !== null && <span className="match__score">{score}</span>}
+            {advance && <AdvanceMark advance={advance(slot)} />}
           </>
         )}
       </button>
@@ -109,6 +120,15 @@ export function MatchCard({ stageId, match, variant = 'stacked' }: Props) {
       {teamButton(0)}
       {teamButton(1)}
     </div>
+  )
+}
+
+function AdvanceMark({ advance }: { advance: Advance | null }) {
+  if (!advance) return <span className="match__advance" aria-hidden />
+  return (
+    <span className={`match__advance match__advance--${advance.direction}`} title={advance.title} role="img" aria-label={advance.title}>
+      {advance.direction === 'on' ? '→' : '↓'}
+    </span>
   )
 }
 

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { MatchId, StageId } from '../types'
 
-export type View = 'stages' | 'odds' | 'teams'
+export type View = 'stages' | 'odds' | 'teams' | 'design'
 
 interface UiStore {
   view: View

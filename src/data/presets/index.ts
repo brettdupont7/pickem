@@ -1,5 +1,6 @@
 import type { Tournament } from '../../types'
 import { cs2Major } from './cs2-major'
+import { groupsPlayoffs } from './groups-playoffs'
 import { nflPlayoffs } from './nfl-playoffs'
 
 export interface TournamentPreset {
@@ -18,6 +19,13 @@ export const presets: TournamentPreset[] = [
     tournament: cs2Major,
   },
   {
+    id: 'groups-playoffs',
+    name: 'Groups + Playoffs',
+    description:
+      'Two 8-team double-elimination groups (upper final decides 1st and 2nd, lower bracket decides 3rd) into a 6-team playoff with byes for the group winners.',
+    tournament: groupsPlayoffs,
+  },
+  {
     id: 'nfl-playoffs',
     name: 'NFL Playoffs',
     description: 'Two 7-team conferences with a bye for the 1 seed and reseeding, then the Super Bowl.',
@@ -25,5 +33,5 @@ export const presets: TournamentPreset[] = [
   },
 ]
 
-export { cs2Major, nflPlayoffs }
+export { cs2Major, groupsPlayoffs, nflPlayoffs }
 export * from './rules'

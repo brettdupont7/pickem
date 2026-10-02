@@ -30,6 +30,8 @@ export interface ComputedStage {
   ranking: TeamId[]
   /** Swiss stages only: rounds, standings and team status. */
   swiss?: SwissState
+  /** Elimination stages only: places each team that's done can still finish in (1-based, inclusive). */
+  places?: Record<TeamId, [number, number]>
   error?: string
 }
 
@@ -61,7 +63,7 @@ function computeStage(
   results: Record<MatchId, MatchReport>,
   randomSeed: number,
   scoring: GameScoring,
-): Pick<ComputedStage, 'matches' | 'ranking' | 'swiss'> & { complete: boolean } {
+): Pick<ComputedStage, 'matches' | 'ranking' | 'swiss' | 'places'> & { complete: boolean } {
   switch (config.format) {
     case 'swiss': {
       const swiss = computeSwiss({ seeds, config, results, randomSeed, scoring })
@@ -75,7 +77,7 @@ function computeStage(
 }
 
 /** Every best-of a stage config can use. */
-function bestOfsIn(config: StageConfig): (BestOf | undefined)[] {
+function bestOfsIn(config: StageConfig): (BestOf | null | undefined)[] {
   switch (config.format) {
     case 'swiss':
       return [config.bestOf, config.advancementBestOf, config.eliminationBestOf]
@@ -105,10 +107,11 @@ export function computeStageIn(
   results: Record<MatchId, MatchReport>,
 ): ComputedStage {
   const base = { stageId: stage.id, matches: [], ranking: [] }
-  const phaseOf = (id: StageId) => tournament.stages.find((s) => s.id === id)?.phase ?? Infinity
-  const unordered = stage.entrants.find((e) => e.kind === 'placement' && !(phaseOf(e.stageId) < stage.phase))
+  const stageById = (id: StageId) => tournament.stages.find((s) => s.id === id)
+  const unordered = stage.entrants.find((e) => e.kind === 'placement' && !((stageById(e.stageId)?.phase ?? Infinity) < stage.phase))
   if (unordered?.kind === 'placement') {
-    return { ...base, status: 'invalid', seeds: null, error: `Draws from "${unordered.stageId}", which doesn't come before it` }
+    const name = stageById(unordered.stageId)?.name ?? unordered.stageId
+    return { ...base, status: 'invalid', seeds: null, error: `Draws from ${name}, which doesn't come before it` }
   }
 
   const resolveEntrant = (source: EntrantSource): TeamId | null => {
@@ -150,6 +153,9 @@ export function validateTournament(tournament: Tournament): TournamentIssue[] {
 
   const invitedTo = new Map<TeamId, StageId>()
   const placementUsedBy = new Map<string, StageId>()
+  // Messages use names, since that's what the user sees.
+  const stageName = (id: StageId) => byId.get(id)?.name ?? id
+  const teamName = (id: TeamId) => tournament.teams[id]?.name ?? id
 
   for (const stage of tournament.stages) {
     const issue = (message: string) => issues.push({ stageId: stage.id, message })
@@ -160,7 +166,7 @@ export function validateTournament(tournament: Tournament): TournamentIssue[] {
       if (entrant.kind === 'team') {
         if (!tournament.teams[entrant.teamId]) issue(`Unknown team "${entrant.teamId}"`)
         const other = invitedTo.get(entrant.teamId)
-        if (other) issue(`Team "${entrant.teamId}" is also entered in "${other}"`)
+        if (other) issue(`${teamName(entrant.teamId)} is also entered in ${stageName(other)}`)
         invitedTo.set(entrant.teamId, stage.id)
         continue
       }
@@ -170,13 +176,13 @@ export function validateTournament(tournament: Tournament): TournamentIssue[] {
         issue(`Draws from unknown stage "${entrant.stageId}"`)
         continue
       }
-      if (from.phase >= stage.phase) issue(`Draws from "${from.id}", which must be in an earlier phase`)
+      if (from.phase >= stage.phase) issue(`Draws from ${from.name}, which must be in an earlier phase`)
       if (!Number.isInteger(entrant.place) || entrant.place < 1 || entrant.place > from.entrants.length)
-        issue(`Place ${entrant.place} doesn't exist in "${from.id}" (${from.entrants.length} teams)`)
+        issue(`Place ${entrant.place} doesn't exist in ${from.name} (${from.entrants.length} teams)`)
 
       const key = `${from.id}#${entrant.place}`
       const other = placementUsedBy.get(key)
-      if (other) issue(`Place ${entrant.place} of "${from.id}" is also used by "${other}"`)
+      if (other) issue(`Place ${entrant.place} of ${from.name} is also used by ${stageName(other)}`)
       placementUsedBy.set(key, stage.id)
     }
 
@@ -184,7 +190,7 @@ export function validateTournament(tournament: Tournament): TournamentIssue[] {
     if (config.format === 'swiss' && (config.winsToAdvance < 1 || config.lossesToEliminate < 1))
       issue('Wins to advance and losses to eliminate must be at least 1')
     for (const bestOf of bestOfsIn(config)) {
-      if (bestOf !== undefined && bestOfError(bestOf)) issue(`Best-of ${bestOf} must be an odd number`)
+      if (bestOf != null && bestOfError(bestOf)) issue(`Best-of ${bestOf} must be an odd number`)
     }
   }
 

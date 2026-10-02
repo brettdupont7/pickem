@@ -50,13 +50,15 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
 
 input,
-select {
+select,
+textarea {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -385,6 +387,22 @@ input[type='number'] {
   color: var(--win);
 }
 
+/* Where a team goes next; fixed width so scores line up with or without one. */
+.match__advance {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  font-weight: 700;
+}
+
+.match__advance--on {
+  color: var(--win);
+}
+
+.match__advance--down {
+  color: var(--lose);
+}
+
 .column-title {
   font-size: 13px;
   color: var(--text-muted);
@@ -660,6 +678,59 @@ input[type='number'] {
   margin-top: 24px;
 }
 
+/* Final placings */
+
+.placings__list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+  max-width: 1000px;
+}
+
+.placings__list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border-left: 3px solid transparent;
+  min-width: 0;
+}
+
+.placings__list li.is-advancing {
+  border-left-color: var(--win);
+}
+
+.placings__list .team-badge {
+  width: 28px;
+  height: 28px;
+  font-size: 10px;
+}
+
+.placings__place {
+  width: 3ch;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.placings__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placings__next {
+  font-size: 12px;
+  color: var(--win);
+  white-space: nowrap;
+}
+
 /* Waiting stage */
 
 .entrants {
@@ -817,6 +888,320 @@ input[type='number'] {
 
 .teams__table input.teams__short {
   width: 70px;
+}
+
+/* Teams */
+
+.teams__actions {
+  margin: 8px 0;
+}
+
+.paste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 480px;
+  margin: 8px 0 12px;
+}
+
+.paste textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Designer */
+
+.design {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1100px;
+}
+
+.panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px 16px 16px;
+  min-width: 0;
+}
+
+.panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.panel__header h2 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin: 8px 0 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.field__label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.field__hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 240px;
+}
+
+.field textarea {
+  width: min(360px, 100%);
+  resize: vertical;
+}
+
+.rules .row {
+  margin-bottom: 4px;
+}
+
+.issues {
+  margin: 4px 0 12px;
+  padding: 8px 8px 8px 28px;
+  background: var(--lose-bg);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
+.phase {
+  margin-bottom: 16px;
+}
+
+.phase__title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 12px 0 6px;
+}
+
+.stage-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.stage-card--invalid {
+  border-color: var(--lose);
+}
+
+.stage-card__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 0;
+}
+
+.stage-card__toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 4px 8px 12px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stage-card__chevron {
+  width: 1ch;
+  color: var(--text-muted);
+}
+
+.stage-card__title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.stage-card__format {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.stage-card__actions {
+  display: flex;
+  flex: none;
+}
+
+.stage-card__summary {
+  margin: -4px 0 0;
+  padding: 0 12px 10px 32px;
+}
+
+.stage-card__body {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.stage-card__section {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 6px;
+}
+
+.stage-card__section .muted {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.stage-card__preview-toggle {
+  margin-top: 16px;
+}
+
+.stage-preview {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+
+.tiebreaker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 10px;
+  background: var(--surface-3);
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.tiebreaker .icon-button {
+  border: 0;
+  padding: 2px 5px;
+}
+
+.round-table {
+  margin: 8px 0;
+}
+
+.round-table h4 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+}
+
+.round-table th {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 2px 8px 2px 0;
+}
+
+.round-table td {
+  padding: 2px 8px 2px 0;
+}
+
+.round-table input:not([type='number']) {
+  width: min(240px, 50vw);
+}
+
+.entrant-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.entrant-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.entrant-row__seed {
+  width: 3ch;
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.entrant-row select {
+  max-width: 100%;
+}
+
+.entrant-row__placement {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.entrant-row__actions {
+  display: inline-flex;
+}
+
+.entrant-row__actions .icon-button {
+  border: 0;
+}
+
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.add-places {
+  margin-top: 8px;
+  align-items: center;
+}
+
+.library__table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.library__table td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.library__name {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.library__actions {
+  text-align: right;
+}
+
+.library__actions .button {
+  margin-left: 4px;
+  padding: 3px 10px;
+}
+
+.panel > .check {
+  margin-top: 8px;
 }
 
 @media (max-width: 600px) {

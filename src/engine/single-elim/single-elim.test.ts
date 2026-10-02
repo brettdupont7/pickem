@@ -164,4 +164,23 @@ describe('reseeding', () => {
       'Conference Championship',
     ])
   })
+
+  it('knows finished places before the bracket ends', () => {
+    // One quarter-final played: its loser is somewhere in 5th-8th.
+    const one = computeSingleElim({ seeds: teams(8), config, results: { 'r0-0': { source: 'pick', winnerId: 't1' } } })
+    expect(one.places).toEqual({ t8: [5, 8] })
+    // All quarter-finals played: the losers split by seed.
+    const results = Object.fromEntries(['t1', 't4', 't2', 't3'].map((winnerId, i) => [`r0-${i}`, { source: 'pick' as const, winnerId }]))
+    const all = computeSingleElim({ seeds: teams(8), config, results })
+    expect(all.places).toEqual({ t5: [5, 5], t6: [6, 6], t7: [7, 7], t8: [8, 8] })
+  })
+
+  it('matches finished places to the final ranking', () => {
+    for (const n of [2, 3, 6, 8, 13]) {
+      for (const thirdPlaceMatch of [false, true]) {
+        const state = play(n, { ...config, thirdPlaceMatch }, randomWinner(n))
+        state.ranking.forEach((id, i) => expect(state.places[id]).toEqual([i + 1, i + 1]))
+      }
+    }
+  })
 })

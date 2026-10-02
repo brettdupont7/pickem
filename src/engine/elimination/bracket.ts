@@ -58,6 +58,8 @@ export interface EliminationState {
   matches: Match[]
   /** Every team ranked best to worst (index 0 = place 1). Final once `complete`. */
   ranking: TeamId[]
+  /** Places each team that's done can still finish in; see `finishedPlaces`. */
+  places: Record<TeamId, [number, number]>
   complete: boolean
 }
 
@@ -160,20 +162,58 @@ export function resolveBracket(
   }
 }
 
-/** Ranks teams by where they finished, then by seed. Teams still alive rank first. */
-export function rankBracket(nodes: BracketNode[], resolved: ResolvedBracket, seeds: TeamId[]): TeamId[] {
+/** The tier each team finished at, for teams that are done. */
+function finishTiers(nodes: BracketNode[], resolved: ResolvedBracket): Map<TeamId, number> {
   const tier = new Map<TeamId, number>()
   resolved.matches.forEach((match, i) => {
-    if (!match.result || match.result.source === 'bye') return
+    if (!match.result) return
     const node = nodes[i]
     const winner = match.result.winnerId
+    // A team can finish on a bye, e.g. a lower final with no opponent.
+    if (node.winnerTier !== undefined) tier.set(winner, node.winnerTier)
+    if (match.result.source === 'bye') return
     const loser = match.slots.find((s) => s.teamId !== winner)!.teamId!
     if (!match.loserTo) tier.set(loser, node.tier)
-    if (node.winnerTier !== undefined) tier.set(winner, node.winnerTier)
   })
+  return tier
+}
+
+/** Ranks teams by where they finished, then by seed. Teams still alive rank first. */
+export function rankBracket(nodes: BracketNode[], resolved: ResolvedBracket, seeds: TeamId[]): TeamId[] {
+  const tier = finishTiers(nodes, resolved)
   const seedOf = new Map(seeds.map((id, i) => [id, i]))
   const tierOf = (id: TeamId) => tier.get(id) ?? Infinity
   return [...seeds].sort((a, b) => tierOf(b) - tierOf(a) || seedOf.get(a)! - seedOf.get(b)!)
+}
+
+/**
+ * The places (1-based, inclusive) each finished team can still end up in,
+ * known before the rest of the bracket is played. How many teams finish at
+ * each tier is fixed by the structure, so a tier covers a fixed run of
+ * places; once every team in a tier is known, they're split by seed.
+ * Teams still playing are left out.
+ */
+export function finishedPlaces(nodes: BracketNode[], resolved: ResolvedBracket, seeds: TeamId[]): Record<TeamId, [number, number]> {
+  const counts = new Map<number, number>()
+  const add = (tier: number) => counts.set(tier, (counts.get(tier) ?? 0) + 1)
+  resolved.matches.forEach((match, i) => {
+    const node = nodes[i]
+    if (!match.loserTo && resolved.loserOf(node.id).kind !== 'none') add(node.tier)
+    if (node.winnerTier !== undefined && resolved.winnerOf(node.id).kind !== 'none') add(node.winnerTier)
+  })
+
+  const tier = finishTiers(nodes, resolved)
+  const seedOf = new Map(seeds.map((id, i) => [id, i]))
+  const places: Record<TeamId, [number, number]> = {}
+  let start = 1
+  for (const [t, count] of [...counts].sort(([a], [b]) => b - a)) {
+    const known = seeds.filter((id) => tier.get(id) === t).sort((a, b) => seedOf.get(a)! - seedOf.get(b)!)
+    known.forEach((id, i) => {
+      places[id] = known.length === count ? [start + i, start + i] : [start, start + count - 1]
+    })
+    start += count
+  }
+  return places
 }
 
 /** A bracket is complete when no match is waiting on a team or a result. */

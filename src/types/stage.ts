@@ -28,6 +28,17 @@ export interface SingleElimConfig {
   thirdPlaceMatch: boolean
 }
 
+/**
+ * How a double-elimination bracket ends.
+ * - grand-final: the upper final's loser drops to the lower final, and the
+ *   upper and lower winners meet in a grand final.
+ * - no-grand-final: as above, but there's no grand final: the upper
+ *   winner places 1st and the lower winner 2nd.
+ * - upper-final-decides: the upper final decides 1st and 2nd (its loser
+ *   doesn't drop), and the lower bracket, one round shorter, decides 3rd.
+ */
+export type DoubleElimFinals = 'grand-final' | 'no-grand-final' | 'upper-final-decides'
+
 export interface DoubleElimConfig {
   format: 'double-elim'
   bestOf: BestOf
@@ -41,7 +52,9 @@ export interface DoubleElimConfig {
   /** Round names counted back from the lower final. */
   lowerRoundNamesFromFinal?: string[]
   seeding: EliminationSeeding
-  /** If the lower-bracket team wins the grand final, play a second series. */
+  /** Default 'grand-final'. */
+  finals?: DoubleElimFinals
+  /** If the lower-bracket team wins the grand final, play a second series. Only with a grand final. */
   grandFinalReset: boolean
 }
 

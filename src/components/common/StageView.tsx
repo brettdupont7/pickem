@@ -1,13 +1,8 @@
-import type { ComputedStage } from '../../engine'
+import { ordinal, type ComputedStage } from '../../engine'
 import { useTournamentStore } from '../../store/tournament'
 import type { Stage } from '../../types'
 import { BracketView } from '../bracket/BracketView'
 import { SwissView } from '../swiss/SwissView'
-
-const ordinal = (n: number) => {
-  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
-  return `${n}${suffix}`
-}
 
 export function StageView({ stage, computed }: { stage: Stage; computed: ComputedStage }) {
   const tournament = useTournamentStore((s) => s.tournament)

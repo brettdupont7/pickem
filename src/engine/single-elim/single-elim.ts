@@ -2,6 +2,7 @@ import type { SingleElimConfig } from '../../types'
 import {
   bestOfFromFinal,
   bracketSize,
+  finishedPlaces,
   firstRoundSlots,
   isComplete,
   rankBracket,
@@ -108,6 +109,7 @@ export function computeSingleElim(input: SingleElimInput): EliminationState {
   return {
     matches: resolved.matches,
     ranking: rankBracket(nodes, resolved, seeds),
+    places: finishedPlaces(nodes, resolved, seeds),
     complete: isComplete(resolved.matches),
   }
 }

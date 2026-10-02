@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ComputedStage } from '../../engine'
-import { useTournamentStore } from '../../store/tournament'
+import { useTeams } from '../common/preview'
 import type { Match, Stage, SwissConfig, TeamId } from '../../types'
 import { MatchCard, PlaceholderRow } from '../common/MatchCard'
 import { TeamBadge } from '../common/TeamBadge'
@@ -63,7 +63,7 @@ function matchesByRecord(round: Match[] | undefined) {
 }
 
 export function SwissView({ stage, computed }: { stage: Stage; computed: ComputedStage }) {
-  const teams = useTournamentStore((s) => s.tournament.teams)
+  const teams = useTeams()
   const config = stage.config as SwissConfig
   const swiss = computed.swiss!
   const seeds = computed.seeds ?? []

@@ -14,6 +14,8 @@ export interface SwissInput {
   randomSeed?: number
   /** How game scores are judged. Default free scoring. */
   scoring?: GameScoring
+  /** Starting Elo ratings by team. See `startingRatings` for teams without one. */
+  ratings?: Record<TeamId, number | undefined>
 }
 
 export interface SwissState {
@@ -36,6 +38,27 @@ interface TeamRecord {
 
 type Pair = [TeamId, TeamId]
 
+export const DEFAULT_RATING = 1500
+export const DEFAULT_RATING_K = 32
+/** Rating gap between neighbouring seeds when no team has a rating. */
+const SEED_RATING_STEP = 25
+
+/**
+ * Starting ratings for a Swiss stage. If any team has a rating, unrated
+ * teams start at 1500. If none do, ratings follow seed order (top seed
+ * highest, 25 apart, centred on 1500), like ESL's seed-based live ratings.
+ */
+export function startingRatings(seeds: TeamId[], ratings: Record<TeamId, number | undefined> = {}): Map<TeamId, number> {
+  const anyRated = seeds.some((id) => ratings[id] !== undefined)
+  const mid = (seeds.length - 1) / 2
+  return new Map(
+    seeds.map((id, i) => [id, anyRated ? ratings[id] ?? DEFAULT_RATING : DEFAULT_RATING + (mid - i) * SEED_RATING_STEP]),
+  )
+}
+
+/** Chance that a team rated `a` beats one rated `b`. */
+const expectedScore = (a: number, b: number) => 1 / (1 + 10 ** ((b - a) / 400))
+
 /**
  * Swiss match IDs come from the pair of teams, not the round, so a result
  * still applies if an earlier change moves that pairing to another round.
@@ -53,7 +76,7 @@ const byeMatchId = (teamId: TeamId, round: number): MatchId => `bye:${round}:${t
  * `seeds`, `config` and `results` alone. Generation stops at the first
  * round that has a match without a result.
  */
-export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring }: SwissInput): SwissState {
+export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring, ratings }: SwissInput): SwissState {
   validate(seeds, config)
   const { winsToAdvance, lossesToEliminate } = config
 
@@ -64,9 +87,12 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring }
     seeds.map((id) => [id, { wins: 0, losses: 0, opponents: [], beat: new Set(), byes: 0 }]),
   )
   const meetings = new Map<string, number>()
+  const live = startingRatings(seeds, ratings)
+  const ratingK = config.ratingK ?? DEFAULT_RATING_K
 
   const rec = (id: TeamId) => records.get(id)!
   const seed = (id: TeamId) => seedOf.get(id)!
+  const rating = (id: TeamId) => live.get(id)!
   const statusOf = (id: TeamId): SwissTeamStatus =>
     rec(id).wins >= winsToAdvance ? 'advanced' : rec(id).losses >= lossesToEliminate ? 'eliminated' : 'active'
   /** Sum of opponents' win-loss differentials, as used for CS2 Majors. */
@@ -87,6 +113,7 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring }
     for (const tiebreaker of config.tiebreakers) {
       let d = 0
       if (tiebreaker === 'buchholz') d = buchholz(b) - buchholz(a)
+      else if (tiebreaker === 'rating') d = rating(b) - rating(a)
       else if (tiebreaker === 'seed') d = seed(a) - seed(b)
       else if (tiebreaker === 'random') d = tieValue.get(a)! - tieValue.get(b)!
       else if (tiebreaker === 'head-to-head') d = Number(rb.beat.has(a)) - Number(ra.beat.has(b))
@@ -140,6 +167,7 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring }
             rec,
             seed,
             buchholz,
+            rating,
             played: config.avoidRematches ? played : () => false,
             rng: roundRng,
           })
@@ -174,6 +202,10 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring }
         continue
       }
       const loser = winner === a ? b : a!
+      // Only the match result counts, not the game score.
+      const gain = ratingK * (1 - expectedScore(rating(winner), rating(loser)))
+      live.set(winner, rating(winner) + gain)
+      live.set(loser, rating(loser) - gain)
       rec(winner).wins++
       rec(winner).beat.add(loser)
       rec(loser).losses++
@@ -188,7 +220,7 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring }
   const status: Record<TeamId, SwissTeamStatus> = {}
   for (const id of seeds) {
     const r = rec(id)
-    standings[id] = { teamId: id, wins: r.wins, losses: r.losses, opponents: [...r.opponents], buchholz: buchholz(id) }
+    standings[id] = { teamId: id, wins: r.wins, losses: r.losses, opponents: [...r.opponents], buchholz: buchholz(id), rating: rating(id) }
     status[id] = statusOf(id)
   }
 
@@ -231,6 +263,7 @@ interface PairingContext {
   rec: (id: TeamId) => TeamRecord
   seed: (id: TeamId) => number
   buchholz: (id: TeamId) => number
+  rating: (id: TeamId) => number
   played: (a: TeamId, b: TeamId) => boolean
   rng: () => number
 }
@@ -302,6 +335,8 @@ function sortGroup(group: TeamId[], config: SwissConfig, ctx: PairingContext): T
   switch (config.pairing) {
     case 'buchholz':
       return [...group].sort((a, b) => ctx.buchholz(b) - ctx.buchholz(a) || ctx.seed(a) - ctx.seed(b))
+    case 'rating':
+      return [...group].sort((a, b) => ctx.rating(b) - ctx.rating(a) || ctx.seed(a) - ctx.seed(b))
     case 'seed':
       return [...group].sort((a, b) => ctx.seed(a) - ctx.seed(b))
     case 'random':

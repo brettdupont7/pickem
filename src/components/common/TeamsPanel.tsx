@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { addBlankTeam, addTeams, removeTeam, renameTeams, teamEntries } from '../../engine'
-import { useTournamentStore } from '../../store/tournament'
-import type { Team } from '../../types'
+import { useTournamentState, useTournamentStore } from '../../store/tournament'
+import type { ComputedStage } from '../../engine'
+import type { Stage, StageId, SwissConfig, Team, TeamId } from '../../types'
 import { PasteTeams } from './PasteTeams'
 import { TeamBadge } from './TeamBadge'
 
@@ -12,6 +13,8 @@ export function TeamsPanel() {
   const { teams } = tournament
   const entries = useMemo(() => teamEntries(tournament), [tournament])
   const stageName = (id: string) => tournament.stages.find((s) => s.id === id)?.name ?? id
+  const state = useTournamentState()
+  const live = useMemo(() => liveRatings(tournament.stages, state.stages), [tournament.stages, state.stages])
 
   const patch = (id: string, changes: Partial<Team>) =>
     update((t) => ({ ...t, teams: { ...t.teams, [id]: { ...t.teams[id], ...changes } } }))
@@ -26,7 +29,9 @@ export function TeamsPanel() {
     <div className="teams">
       <p className="hint">
         Short names and logos show in the Swiss grid (initials are used when blank). Ratings drive the simulator
-        (Elo scale: 200 points ≈ 76% to win a single game); blank = 1500. Enter teams into stages in the Design tab.
+        (Elo scale: 200 points ≈ 76% to win a single game); blank = 1500. They're also the starting point for Swiss
+        stages paired by live rating, and the arrow shows each team's live rating after its matches so far. Enter teams
+        into stages in the Design tab.
       </p>
       <div className="row teams__actions">
         <button className="button" onClick={() => update((t) => addBlankTeam(t).tournament)}>
@@ -96,6 +101,11 @@ export function TeamsPanel() {
                     aria-label={`${team.name} rating`}
                     onChange={(e) => patch(team.id, { rating: e.target.value === '' ? undefined : Number(e.target.value) })}
                   />
+                  {live.has(team.id) && (
+                    <span className="teams__live muted" title={`Live rating in ${live.get(team.id)!.stage}`}>
+                      → {Math.round(live.get(team.id)!.rating)}
+                    </span>
+                  )}
                 </td>
                 <td className="muted">{entries.has(team.id) ? stageName(entries.get(team.id)!) : 'Not entered'}</td>
                 <td>
@@ -110,4 +120,25 @@ export function TeamsPanel() {
       </div>
     </div>
   )
+}
+
+/**
+ * Each team's live rating from the latest Swiss stage it has played in that
+ * pairs or breaks ties by rating.
+ */
+function liveRatings(
+  stages: Stage[],
+  computed: Record<StageId, ComputedStage>,
+): Map<TeamId, { rating: number; stage: string }> {
+  const out = new Map<TeamId, { rating: number; stage: string }>()
+  const ordered = [...stages].sort((a, b) => a.phase - b.phase)
+  for (const stage of ordered) {
+    const config = stage.config as SwissConfig
+    const swiss = computed[stage.id]?.swiss
+    if (!swiss || (config.pairing !== 'rating' && !config.tiebreakers.includes('rating'))) continue
+    for (const standing of Object.values(swiss.standings)) {
+      if (standing.opponents.length) out.set(standing.teamId, { rating: standing.rating, stage: stage.name })
+    }
+  }
+  return out
 }

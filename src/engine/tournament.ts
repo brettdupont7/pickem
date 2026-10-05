@@ -63,10 +63,11 @@ function computeStage(
   results: Record<MatchId, MatchReport>,
   randomSeed: number,
   scoring: GameScoring,
+  ratings: Record<TeamId, number | undefined>,
 ): Pick<ComputedStage, 'matches' | 'ranking' | 'swiss' | 'places'> & { complete: boolean } {
   switch (config.format) {
     case 'swiss': {
-      const swiss = computeSwiss({ seeds, config, results, randomSeed, scoring })
+      const swiss = computeSwiss({ seeds, config, results, randomSeed, scoring, ratings })
       return { matches: swiss.rounds.flat(), ranking: swiss.ranking, complete: swiss.complete, swiss }
     }
     case 'single-elim':
@@ -126,7 +127,9 @@ export function computeStageIn(
   const seeds = resolved as TeamId[]
   try {
     const randomSeed = stageRandomSeed(tournament.randomSeed ?? 0, stage.id)
-    const { complete, ...out } = computeStage(stage.config, seeds, results, randomSeed, tournament.rules?.scoring ?? FREE_SCORING)
+    const ratings = Object.fromEntries(seeds.map((id) => [id, tournament.teams[id]?.rating]))
+    const scoring = tournament.rules?.scoring ?? FREE_SCORING
+    const { complete, ...out } = computeStage(stage.config, seeds, results, randomSeed, scoring, ratings)
     return { stageId: stage.id, status: complete ? 'complete' : 'in-progress', seeds, ...out }
   } catch (e) {
     return { ...base, status: 'invalid', seeds, error: (e as Error).message }

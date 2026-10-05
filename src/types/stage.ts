@@ -67,11 +67,14 @@ export interface DoubleElimConfig {
  */
 export type SwissFirstRoundPairing = 'high-low' | 'fold' | 'adjacent' | 'random'
 
-/** Later Swiss rounds pair teams within the same W-L record. */
-export type SwissPairing = 'buchholz' | 'seed' | 'random'
+/**
+ * Later Swiss rounds pair teams within the same W-L record.
+ * - rating: by live Elo rating, updated after every match (as in ESL Pro League)
+ */
+export type SwissPairing = 'buchholz' | 'rating' | 'seed' | 'random'
 
 /** Ranks teams with the same final record, in priority order. */
-export type SwissTiebreaker = 'buchholz' | 'seed' | 'head-to-head' | 'random'
+export type SwissTiebreaker = 'buchholz' | 'rating' | 'seed' | 'head-to-head' | 'random'
 
 /**
  * A team advances on `winsToAdvance` wins and is eliminated on
@@ -91,6 +94,8 @@ export interface SwissConfig {
   pairing: SwissPairing
   avoidRematches: boolean
   tiebreakers: SwissTiebreaker[]
+  /** Elo K-factor for live ratings: the most a rating can move in one match. Default 32. */
+  ratingK?: number
 }
 
 export type StageConfig = SingleElimConfig | DoubleElimConfig | SwissConfig
@@ -112,6 +117,8 @@ export interface SwissStanding {
   /** Opponents faced so far, used to avoid rematches and compute Buchholz. */
   opponents: TeamId[]
   buchholz: number
+  /** Live Elo rating: the starting rating updated by every match result so far. */
+  rating: number
 }
 
 /**

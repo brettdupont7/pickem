@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   bracketSummary,
+  DEFAULT_RATING_K,
   defaultConfig,
   describeConfig,
   describeEntrants,
@@ -64,12 +65,14 @@ const FIRST_ROUND: Record<SwissFirstRoundPairing, string> = {
 
 const PAIRING: Record<SwissPairing, string> = {
   buchholz: 'Buchholz (strength of schedule)',
+  rating: 'Live rating (Elo)',
   seed: 'Seed',
   random: 'Random',
 }
 
 const TIEBREAKER: Record<SwissTiebreaker, string> = {
   buchholz: 'Buchholz',
+  rating: 'Live rating',
   seed: 'Seed',
   'head-to-head': 'Head-to-head',
   random: 'Random',
@@ -225,6 +228,11 @@ function SwissSettings({ config, setConfig }: { config: SwissConfig; setConfig: 
         <Field label="Rematches">
           <Check label="Avoid rematches" checked={config.avoidRematches} onChange={(avoidRematches) => setConfig({ avoidRematches })} />
         </Field>
+        {(config.pairing === 'rating' || config.tiebreakers.includes('rating')) && (
+          <Field label="Rating K-factor" hint="Most a live rating can move in one match. Starting ratings come from the Teams tab, or from seed order if no team has one.">
+            <NumberInput optional min={1} value={config.ratingK} placeholder={`${DEFAULT_RATING_K}`} label="Rating K-factor" onChange={(ratingK) => setConfig({ ratingK })} />
+          </Field>
+        )}
       </div>
       <Field label="Tiebreakers" hint="Rank teams with the same record, in this order.">
         <div className="row">

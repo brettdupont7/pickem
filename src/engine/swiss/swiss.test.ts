@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Match, MatchResult, SwissConfig, TeamId } from '../../types'
 import { createRng } from '../random'
-import { computeSwiss, type SwissState } from './swiss'
+import { computeSwiss, startingRatings, type SwissState } from './swiss'
 
 const cs2Swiss: SwissConfig = {
   format: 'swiss',
@@ -163,5 +163,50 @@ describe('computeSwiss', () => {
     expect(() =>
       computeSwiss({ seeds: teams(4), config: { ...cs2Swiss, winsToAdvance: 0 }, results: {} }),
     ).toThrow()
+  })
+})
+
+describe('live rating pairing', () => {
+  const eslSwiss: SwissConfig = { ...cs2Swiss, bestOf: 3, firstRoundPairing: 'fold', pairing: 'rating', tiebreakers: ['rating', 'seed'] }
+
+  it('derives starting ratings from seed order when no team is rated', () => {
+    const start = startingRatings(teams(4))
+    expect([...start.values()]).toEqual([1537.5, 1512.5, 1487.5, 1462.5])
+  })
+
+  it('uses team ratings when any are given, defaulting the rest to 1500', () => {
+    const start = startingRatings(teams(3), { t2: 1700 })
+    expect([...start.values()]).toEqual([1500, 1700, 1500])
+  })
+
+  it('moves ratings by Elo on match results only', () => {
+    const results = { 't1|t2': { winnerId: 't2', source: 'pick' as const } }
+    const ratings = { t1: 1500, t2: 1500 }
+    const state = computeSwiss({ seeds: teams(2), config: { ...eslSwiss, winsToAdvance: 1, lossesToEliminate: 1, firstRoundPairing: 'adjacent' }, results, ratings })
+    expect(state.standings.t2.rating).toBe(1516)
+    expect(state.standings.t1.rating).toBe(1484)
+  })
+
+  it('pairs the highest live rating against the lowest within a record group', () => {
+    // Fold: t1-t8, t2-t7, t3-t6, t4-t5. Upsets by t8 and t7 give them big gains.
+    const ratings = Object.fromEntries(teams(8).map((id, i) => [id, 1800 - i * 50]))
+    const results: Record<string, MatchResult> = {
+      't1|t8': { winnerId: 't8', source: 'pick' },
+      't2|t7': { winnerId: 't7', source: 'pick' },
+      't3|t6': { winnerId: 't3', source: 'pick' },
+      't4|t5': { winnerId: 't4', source: 'pick' },
+    }
+    const state = computeSwiss({ seeds: teams(8), config: eslSwiss, results, ratings })
+    const winners = state.rounds[1].filter((m) => m.label === '1-0').map((m) => m.slots.map((s) => s.teamId))
+    // 1-0 live ratings: t3 1650+, t4 1630+, t7 ~1543, t8 ~1491.
+    expect(winners).toEqual([
+      ['t3', 't8'],
+      ['t4', 't7'],
+    ])
+  })
+
+  it('plays out a 16-team stage without rematches', () => {
+    const state = playOut(teams(16), eslSwiss, randomWinner(7))
+    expectNoRematches(state)
   })
 })

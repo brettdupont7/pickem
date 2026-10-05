@@ -919,6 +919,12 @@ input[type='number'] {
   width: 70px;
 }
 
+.teams__live {
+  margin-left: 6px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Teams */
 
 .teams__actions {

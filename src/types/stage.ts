@@ -12,6 +12,14 @@ export type StageId = string
  */
 export type EliminationSeeding = 'standard' | 'as-listed' | 'random'
 
+/**
+ * Which order entrants are seeded in, before `seeding` places them.
+ * - entrants: as listed (e.g. by placement in an earlier stage)
+ * - live-rating: highest live Elo rating first. Teams from a Swiss stage use
+ *   the rating they finished it with; others use their team rating.
+ */
+export type SeedOrder = 'entrants' | 'live-rating'
+
 export interface SingleElimConfig {
   format: 'single-elim'
   bestOf: BestOf
@@ -20,6 +28,8 @@ export interface SingleElimConfig {
   /** Round names counted back from the final, e.g. ['Super Bowl', 'Conference Championship']. */
   roundNamesFromFinal?: string[]
   seeding: EliminationSeeding
+  /** Default 'entrants'. */
+  seedOrder?: SeedOrder
   /**
    * Re-pair survivors after every round, best remaining seed v worst
    * (as in the NFL). Later rounds stay TBD until the round before finishes.
@@ -52,6 +62,8 @@ export interface DoubleElimConfig {
   /** Round names counted back from the lower final. */
   lowerRoundNamesFromFinal?: string[]
   seeding: EliminationSeeding
+  /** Default 'entrants'. */
+  seedOrder?: SeedOrder
   /** Default 'grand-final'. */
   finals?: DoubleElimFinals
   /** If the lower-bracket team wins the grand final, play a second series. Only with a grand final. */

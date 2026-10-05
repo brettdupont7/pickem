@@ -23,6 +23,7 @@ import type {
   DoubleElimConfig,
   DoubleElimFinals,
   EliminationSeeding,
+  SeedOrder,
   SingleElimConfig,
   Stage,
   StageConfig,
@@ -42,6 +43,16 @@ const SEEDING: Record<EliminationSeeding, string> = {
   standard: 'Standard (1 v lowest)',
   'as-listed': 'As listed (1 v 2, 3 v 4)',
   random: 'Random draw',
+}
+
+const SEED_ORDER: Record<SeedOrder, string> = {
+  entrants: 'Entrant order',
+  'live-rating': 'Live rating (Elo)',
+}
+
+const SEED_ORDER_HINT: Record<SeedOrder, string> = {
+  entrants: 'Seed 1 is the first entrant.',
+  'live-rating': 'Highest live rating is seed 1. Swiss qualifiers use their final live rating; others use their team rating.',
 }
 
 const FINALS: Record<DoubleElimFinals, string> = {
@@ -278,6 +289,14 @@ function SingleElimSettings({ stage, config, setConfig }: { stage: Stage; config
         <Field label="Seeding" hint={bracketSummary(stage.entrants.length)}>
           <Select value={config.seeding} options={SEEDING} label="Seeding" onChange={(seeding) => setConfig({ seeding })} />
         </Field>
+        <Field label="Seed order" hint={SEED_ORDER_HINT[config.seedOrder ?? 'entrants']}>
+          <Select
+            value={config.seedOrder ?? 'entrants'}
+            options={SEED_ORDER}
+            label="Seed order"
+            onChange={(next) => setConfig({ seedOrder: next === 'entrants' ? undefined : next })}
+          />
+        </Field>
         <Field label="Options">
           <Check label="Reseed every round" checked={!!config.reseed} onChange={(reseed) => setConfig({ reseed: reseed || undefined })} />
           <Check label="3rd place match" checked={config.thirdPlaceMatch} onChange={(thirdPlaceMatch) => setConfig({ thirdPlaceMatch })} />
@@ -306,6 +325,14 @@ function DoubleElimSettings({ stage, config, setConfig }: { stage: Stage; config
         </Field>
         <Field label="Seeding" hint={bracketSummary(stage.entrants.length)}>
           <Select value={config.seeding} options={SEEDING} label="Seeding" onChange={(seeding) => setConfig({ seeding })} />
+        </Field>
+        <Field label="Seed order" hint={SEED_ORDER_HINT[config.seedOrder ?? 'entrants']}>
+          <Select
+            value={config.seedOrder ?? 'entrants'}
+            options={SEED_ORDER}
+            label="Seed order"
+            onChange={(next) => setConfig({ seedOrder: next === 'entrants' ? undefined : next })}
+          />
         </Field>
         <Field label="Finals" hint={FINALS_HINT[finals]}>
           <Select

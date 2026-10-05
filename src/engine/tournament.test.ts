@@ -72,6 +72,29 @@ describe('computeTournament', () => {
   })
 })
 
+describe('live rating seed order', () => {
+  const liveSeeded: Tournament = {
+    ...cs2Major,
+    stages: cs2Major.stages.map((s) =>
+      s.id === 'playoffs' && s.config.format === 'single-elim' ? { ...s, config: { ...s.config, seedOrder: 'live-rating' } } : s,
+    ),
+  }
+
+  it('seeds the playoffs by final Swiss live rating, highest first', () => {
+    const state = playTournament(liveSeeded, randomWinner(3))
+    const qualifiers = state.stages['stage-3'].ranking.slice(0, 8)
+    const rating = (id: string) => state.stages['stage-3'].swiss!.standings[id].rating
+    const seeds = state.stages.playoffs.seeds!
+    expect([...seeds].sort()).toEqual([...qualifiers].sort())
+    expect(seeds.map(rating)).toEqual([...qualifiers.map(rating)].sort((a, b) => b - a))
+  })
+
+  it('uses entrant order by default', () => {
+    const state = playTournament(cs2Major, randomWinner(3))
+    expect(state.stages.playoffs.seeds).toEqual(state.stages['stage-3'].ranking.slice(0, 8))
+  })
+})
+
 describe('validateTournament', () => {
   it('accepts the CS2 Major preset', () => {
     expect(validateTournament(cs2Major)).toEqual([])

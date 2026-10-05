@@ -16,7 +16,7 @@ import { computeDoubleElim } from './double-elim'
 import { bestOfError } from './results'
 import { FREE_SCORING } from './rules'
 import { computeSingleElim } from './single-elim'
-import { computeSwiss, type SwissState } from './swiss'
+import { computeSwiss, DEFAULT_RATING, type SwissState } from './swiss'
 
 export type StageStatus = 'waiting' | 'in-progress' | 'complete' | 'invalid'
 
@@ -63,10 +63,11 @@ function computeStage(
   results: Record<MatchId, MatchReport>,
   randomSeed: number,
   scoring: GameScoring,
+  ratings: Record<TeamId, number | undefined>,
 ): Pick<ComputedStage, 'matches' | 'ranking' | 'swiss' | 'places'> & { complete: boolean } {
   switch (config.format) {
     case 'swiss': {
-      const swiss = computeSwiss({ seeds, config, results, randomSeed, scoring })
+      const swiss = computeSwiss({ seeds, config, results, randomSeed, scoring, ratings })
       return { matches: swiss.rounds.flat(), ranking: swiss.ranking, complete: swiss.complete, swiss }
     }
     case 'single-elim':
@@ -123,14 +124,40 @@ export function computeStageIn(
   const resolved = stage.entrants.map(resolveEntrant)
   if (resolved.some((id) => id === null)) return { ...base, status: 'waiting', seeds: null }
 
-  const seeds = resolved as TeamId[]
+  const seeds = stage.config.format !== 'swiss' && stage.config.seedOrder === 'live-rating'
+    ? byLiveRating(tournament, stage.entrants, resolved as TeamId[], earlier)
+    : (resolved as TeamId[])
   try {
     const randomSeed = stageRandomSeed(tournament.randomSeed ?? 0, stage.id)
-    const { complete, ...out } = computeStage(stage.config, seeds, results, randomSeed, tournament.rules?.scoring ?? FREE_SCORING)
+    const ratings = Object.fromEntries(seeds.map((id) => [id, tournament.teams[id]?.rating]))
+    const scoring = tournament.rules?.scoring ?? FREE_SCORING
+    const { complete, ...out } = computeStage(stage.config, seeds, results, randomSeed, scoring, ratings)
     return { stageId: stage.id, status: complete ? 'complete' : 'in-progress', seeds, ...out }
   } catch (e) {
     return { ...base, status: 'invalid', seeds, error: (e as Error).message }
   }
+}
+
+/**
+ * Reorders `seeds` by live rating, highest first. A team that qualified from
+ * a Swiss stage uses the rating it finished that stage with; any other team
+ * uses its team rating. Ties keep entrant order.
+ */
+function byLiveRating(
+  tournament: Tournament,
+  entrants: EntrantSource[],
+  seeds: TeamId[],
+  earlier: Record<StageId, ComputedStage>,
+): TeamId[] {
+  const ratingOf = (id: TeamId, i: number) => {
+    const source = entrants[i]
+    const swiss = source.kind === 'placement' ? earlier[source.stageId]?.swiss : undefined
+    return swiss?.standings[id]?.rating ?? tournament.teams[id]?.rating ?? DEFAULT_RATING
+  }
+  return seeds
+    .map((id, i) => ({ id, i, rating: ratingOf(id, i) }))
+    .sort((a, b) => b.rating - a.rating || a.i - b.i)
+    .map((s) => s.id)
 }
 
 /** Computes every stage from the tournament definition and results. */

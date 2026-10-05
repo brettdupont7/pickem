@@ -919,6 +919,33 @@ input[type='number'] {
   width: 70px;
 }
 
+.teams__live {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.teams__sort {
+  all: unset;
+  cursor: pointer;
+  font-weight: inherit;
+}
+
+.teams__sort:hover {
+  text-decoration: underline;
+}
+
+.teams__sort:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.teams__sort-arrow {
+  display: inline-block;
+  width: 1em;
+  margin-left: 2px;
+  font-size: 0.75em;
+}
+
 /* Teams */
 
 .teams__actions {

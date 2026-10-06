@@ -14,7 +14,24 @@ interface Sort {
   desc: boolean
 }
 
-const SORT_LABEL: Record<SortKey, string> = { name: 'Name', rating: 'Rating', form: 'Form', live: 'Live' }
+const SORT_LABEL: Record<SortKey, string> = { name: 'Name', rating: 'Rating', form: 'Form', live: 'Pairing' }
+
+/** Whether the Pairing column is shown; a per-browser preference, so storage may be unavailable. */
+const SHOW_PAIRING_KEY = 'pickem-show-pairing'
+const readShowPairing = () => {
+  try {
+    return localStorage.getItem(SHOW_PAIRING_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const writeShowPairing = (show: boolean) => {
+  try {
+    localStorage.setItem(SHOW_PAIRING_KEY, show ? '1' : '0')
+  } catch {
+    // Not remembered; the column still toggles for this visit.
+  }
+}
 
 export function TeamsPanel() {
   const tournament = useTournamentStore((s) => s.tournament)
@@ -28,6 +45,14 @@ export function TeamsPanel() {
   // Ratings after actual results, when the tournament's rules switch form on.
   const form = useMemo(() => (tournament.rules?.formK ? formRatings(tournament, actual) : null), [tournament, actual])
   const live = useMemo(() => liveRatings(tournament.stages, state.stages), [tournament.stages, state.stages])
+  // Pairing ratings only decide Swiss matchups, so they're hidden unless asked for.
+  const [showPairingPref, setShowPairingPref] = useState(readShowPairing)
+  const showPairing = showPairingPref && live.size > 0
+  const togglePairing = (show: boolean) => {
+    setShowPairingPref(show)
+    writeShowPairing(show)
+    if (!show && sort?.key === 'live') setSort(null)
+  }
   // The order is fixed when a header is clicked, so rows don't jump while a rating is being typed.
   const [sort, setSort] = useState<Sort | null>(null)
   const [order, setOrder] = useState<TeamId[]>([])
@@ -80,8 +105,7 @@ export function TeamsPanel() {
       <p className="hint">
         Short names and logos show in the Swiss grid (initials are used when blank). Ratings drive the simulator
         (Elo scale: 200 points ≈ 76% to win a single game); blank = 1500. They're also the starting point for Swiss
-        stages paired by live rating; Live shows each team's rating after its matches so far. Click Name, Rating or
-        Live to sort. Enter teams into stages in the Design tab.
+        stages paired by live rating. Click a column heading to sort. Enter teams into stages in the Design tab.
       </p>
       <VrsPanel />
       <div className="row teams__actions">
@@ -91,6 +115,12 @@ export function TeamsPanel() {
         <button className="button" onClick={() => setPasting(!pasting)}>
           Paste team names…
         </button>
+        {live.size > 0 && (
+          <label className="check" title="Ratings a Swiss stage uses to decide who plays whom (an Elo-style stand-in for ESL's live ratings), not team strength">
+            <input type="checkbox" checked={showPairing} onChange={(e) => togglePairing(e.target.checked)} />
+            Show pairing ratings
+          </label>
+        )}
       </div>
       {pasting && (
         <PasteTeams
@@ -112,7 +142,7 @@ export function TeamsPanel() {
               <th>Logo URL</th>
               {header('rating')}
               {form && header('form')}
-              {header('live')}
+              {showPairing && header('live')}
               <th>Source</th>
               <th>Enters in</th>
               <th />
@@ -170,9 +200,14 @@ export function TeamsPanel() {
                     )}
                   </td>
                 )}
-                <td className="teams__live muted" title={live.has(team.id) ? `Live rating in ${live.get(team.id)!.stage}` : undefined}>
-                  {live.has(team.id) ? Math.round(live.get(team.id)!.rating) : '—'}
-                </td>
+                {showPairing && (
+                  <td
+                    className="teams__live muted"
+                    title={live.has(team.id) ? `Decides ${live.get(team.id)!.stage} matchups; not a strength rating` : undefined}
+                  >
+                    {live.has(team.id) ? Math.round(live.get(team.id)!.rating) : '—'}
+                  </td>
+                )}
                 <td className="muted teams__source">
                   {team.ratingSource ? (
                     <span title={`Rating from ${team.ratingSource.catalog.toUpperCase()} standings of ${formatAsOf(team.ratingSource.asOf)}`}>

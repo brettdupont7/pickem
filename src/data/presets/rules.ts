@@ -6,8 +6,10 @@ export const cs2Rules: GameRules = {
   terms: { game: 'Map', games: 'Maps', point: 'Round', points: 'Rounds' },
   // Active Duty pool at the time of writing; edit as the pool rotates.
   gamePool: ['Ancient', 'Anubis', 'Dust2', 'Inferno', 'Mirage', 'Nuke', 'Train'],
-  // Ratings usually come from VRS, whose points predict a best-of-3.
+  // Ratings usually come from VRS, whose points predict a best-of-3, and
+  // Valve's fit of VRS shows even big underdogs win about 10% of the time.
   ratingBasis: 'series',
+  upsetFloor: 0.1,
 }
 
 /** Valorant: first to 13 rounds, overtime won by two clear rounds. */

@@ -3,6 +3,13 @@ import { addTeams } from './design'
 
 /** Ranking catalogs: parsing snapshots and linking a tournament's teams to them. */
 
+/**
+ * Rules that make VRS points predict well: they predict a best-of-3, and
+ * Valve's fit of observed vs expected win rates (observed ≈ 0.8 × expected
+ * + 0.13) shows even big underdogs win about 10% of the time.
+ */
+export const VRS_CALIBRATION = { ratingBasis: 'series', upsetFloor: 0.1 } as const
+
 /** Words that don't tell teams apart: "Team Spirit" is "Spirit", "FURIA Esports" is "FURIA". */
 const FILLER = new Set(['team', 'esports', 'esport', 'gaming', 'club', 'the'])
 

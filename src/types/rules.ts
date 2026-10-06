@@ -37,4 +37,11 @@ export interface GameRules {
    * the simulator then derives the per-game chance that gives those odds.
    */
   ratingBasis?: 'game' | 'series'
+  /**
+   * The least chance an underdog has, however big the rating gap: odds
+   * become floor + (1 - 2 * floor) * Elo odds. Applies to what ratings
+   * predict (see `ratingBasis`). Default 0. Valve's own VRS fit shows big
+   * underdogs still win about 10% of the time.
+   */
+  upsetFloor?: number
 }

@@ -46,14 +46,17 @@ export function createSimulator(tournament: Tournament, options: SimulationOptio
   const rating = (id: TeamId) => options.ratings?.[id] ?? tournament.teams[id]?.rating ?? defaultRating
 
   const seriesBasis = tournament.rules?.ratingBasis === 'series'
+  const floor = Math.min(0.5, Math.max(0, tournament.rules?.upsetFloor ?? 0))
 
   /**
    * Chance that `a` beats `b` in a single game. The Elo formula gives the
    * chance of winning whatever ratings predict: one game, or with a
    * 'series' basis a best-of-3, which is converted to a per-game chance.
+   * The upset floor keeps the underdog's chance of that above a minimum.
    */
   const gameWinProbability = (a: TeamId, b: TeamId) => {
-    const predicted = 1 / (1 + 10 ** (((rating(b) - rating(a)) * (1 - chaos)) / 400))
+    const elo = 1 / (1 + 10 ** (((rating(b) - rating(a)) * (1 - chaos)) / 400))
+    const predicted = floor + (1 - 2 * floor) * elo
     return seriesBasis ? gameChanceForBestOf3(predicted) : predicted
   }
 

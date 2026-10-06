@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addFromCatalog, linkTeam, matchTeams, normalizeTeamName, updateRatings } from '../../engine'
+import { addFromCatalog, linkTeam, matchTeams, normalizeTeamName, updateRatings, VRS_CALIBRATION } from '../../engine'
 import { useCatalogStore } from '../../store/catalog'
 import { useTournamentStore } from '../../store/tournament'
 import type { Catalog, CatalogEntry, TeamId } from '../../types'
@@ -25,7 +25,8 @@ export function VrsPanel() {
 
   const linked = Object.values(tournament.teams).filter((t) => t.ratingSource?.catalog === 'vrs')
   const stale = vrs ? linked.filter((t) => t.ratingSource!.asOf !== vrs.asOf) : []
-  const seriesBasis = tournament.rules?.ratingBasis === 'series'
+  const calibrated =
+    tournament.rules?.ratingBasis === VRS_CALIBRATION.ratingBasis && tournament.rules?.upsetFloor === VRS_CALIBRATION.upsetFloor
 
   const applyUpdate = () => {
     if (!vrs) return
@@ -38,8 +39,7 @@ export function VrsPanel() {
     )
   }
 
-  const useSeriesBasis = () =>
-    update((t) => ({ ...t, rules: { ...(t.rules ?? { scoring: { kind: 'free' } }), ratingBasis: 'series' } }))
+  const useCalibration = () => update((t) => ({ ...t, rules: { ...(t.rules ?? { scoring: { kind: 'free' } }), ...VRS_CALIBRATION } }))
 
   return (
     <section className="vrs">
@@ -69,13 +69,14 @@ export function VrsPanel() {
       </div>
       {error && <p className="error">{error}</p>}
       {message && <p className="hint">{message}</p>}
-      {linked.length > 0 && !seriesBasis && (
+      {linked.length > 0 && !calibrated && (
         <p className="hint">
-          VRS points predict who wins a best-of-3, but this tournament's ratings are set to predict a single map, which makes
-          favourites too strong.{' '}
-          <button className="link-button" onClick={useSeriesBasis}>
-            Treat ratings as best-of-3 strength
-          </button>
+          This tournament's odds aren't set up for VRS points yet, so favourites come out too strong. VRS points predict a
+          best-of-3, and Valve's own data shows big underdogs still win about 10% of the time.{' '}
+          <button className="link-button" onClick={useCalibration}>
+            Use VRS calibration
+          </button>{' '}
+          (sets Ratings predict to a best-of-3 and the upset floor to 10% in Game rules)
         </p>
       )}
       {vrs && mode === 'add' && <VrsPicker vrs={vrs} onClose={() => setMode(null)} onDone={setMessage} />}

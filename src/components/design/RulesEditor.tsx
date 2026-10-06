@@ -141,6 +141,20 @@ export function RulesEditor({ rules, onChange }: { rules: GameRules | undefined;
         </div>
       </Field>
 
+      <Field
+        label="Upset floor (%)"
+        hint="The least chance an underdog has, however big the rating gap. 10% matches how often big VRS underdogs actually win."
+      >
+        <NumberInput
+          optional
+          min={0}
+          value={current.upsetFloor ? Math.round(current.upsetFloor * 100) : undefined}
+          placeholder="0"
+          label="Upset floor (%)"
+          onChange={(n) => onChange({ ...current, upsetFloor: n ? Math.min(50, n) / 100 : undefined })}
+        />
+      </Field>
+
       <Field label={`${terms.game} names (optional)`} hint={`One per line, e.g. a map pool. Offered when entering each ${terms.game.toLowerCase()}.`}>
         <GamePool
           key={(current.gamePool ?? []).join('\n')}

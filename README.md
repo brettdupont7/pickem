@@ -98,6 +98,7 @@ The **Design** tab edits the open tournament. Changes apply straight away, and t
   - **Words:** what the UI calls a game and a point.
   - **Game names:** an optional list, such as a map pool.
   - **Ratings predict:** whether a rating gap predicts one game (default) or a best-of-3. VRS points predict a best-of-3, so the CS2 rule set uses that; the simulator then works out the per-game chance that gives those odds, so a Bo3 matches VRS and a Bo1 is closer to a coin flip.
+  - **Upset floor:** the least chance an underdog has, however big the rating gap. Valve's own fit of VRS shows big underdogs still win about 10% of the time, so the CS2 rule set uses 10%; other rule sets use 0. Once teams are linked to VRS, the Teams tab offers **Use VRS calibration** to set both of these.
   - **Load a rule set** fills these in for CS2, Valorant, American football or a generic sport.
 - **Stages:** grouped by phase. Click a stage to expand it. Each badge shows how many problems the stage has.
   - **Duplicating:** **⧉** on a stage copies it into the same phase, and **Duplicate phase** copies every stage in a phase into a new phase right after it. Copies keep the format and settings, and get entrants that work straight away: places from another stage move to the next free places (a copy of a playoff taking 1st–8th takes 9th–16th), and invited teams, or places with none left, become new placeholder teams to rename.

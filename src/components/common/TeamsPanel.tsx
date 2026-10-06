@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addBlankTeam, addTeams, formRatings, removeTeam, renameTeams, teamEntries } from '../../engine'
+import { addBlankTeam, addTeams, formRatings, removeTeam, renameTeams, teamEntries, termsFor } from '../../engine'
 import { useTournamentState, useTournamentStore } from '../../store/tournament'
 import type { ComputedStage } from '../../engine'
 import type { Stage, StageId, SwissConfig, Team, TeamId } from '../../types'
@@ -82,6 +82,14 @@ export function TeamsPanel() {
   const ids = Object.keys(teams)
   const rows = sort ? [...order.filter((id) => teams[id]), ...ids.filter((id) => !order.includes(id))] : ids
 
+  // What a rating gap means under this tournament's rules, for the hint.
+  const rules = tournament.rules
+  const ratingScale =
+    `200 points ≈ 76% to win ${rules?.ratingBasis === 'series' ? 'a best-of-3' : `one ${termsFor(rules).game.toLowerCase()}`}` +
+    (rules?.upsetFloor ? `, before the ${Math.round(rules.upsetFloor * 100)}% upset floor` : '')
+  const sortable = ['Name', 'Rating', ...(form ? ['Form'] : []), ...(showPairing ? ['Pairing'] : [])]
+  const sortableNames = `${sortable.slice(0, -1).join(', ')} or ${sortable.at(-1)}`
+
   const header = (key: SortKey) => (
     <th aria-sort={sort?.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined}>
       <button className="teams__sort" onClick={() => sortBy(key)} title={`Sort by ${SORT_LABEL[key].toLowerCase()}`}>
@@ -103,9 +111,10 @@ export function TeamsPanel() {
   return (
     <div className="teams">
       <p className="hint">
-        Short names and logos show in the Swiss grid (initials are used when blank). Ratings drive the simulator
-        (Elo scale: 200 points ≈ 76% to win a single game); blank = 1500. They're also the starting point for Swiss
-        stages paired by live rating. Click a column heading to sort. Enter teams into stages in the Design tab.
+        Short names and logos show in the Swiss grid (initials are used when blank). Ratings drive the simulator (Elo
+        scale: {ratingScale}; set in Game rules); blank = 1500.
+        {form ? ' With Form on, odds use each team’s Form rating instead.' : ''} Click {sortableNames} to sort. Enter
+        teams into stages in the Design tab.
       </p>
       <VrsPanel />
       <div className="row teams__actions">

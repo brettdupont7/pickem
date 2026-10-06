@@ -191,16 +191,32 @@ export function migrateStore(persisted: unknown, version: number): TournamentSto
   let state = { ...(persisted as Record<string, unknown>) }
   if (version < 2) state = { ...state, library: {} }
   if (version < 3) {
-    const { results, ...rest } = state
     const library = Object.fromEntries(
-      Object.entries((state.library ?? {}) as Record<string, { results?: TournamentResults }>).map(([id, entry]) => {
-        const { results: entryResults, ...entryRest } = entry
-        return [id, { ...entryRest, ...splitBySource(entryResults ?? {}) }]
-      }),
+      Object.entries((state.library ?? {}) as Record<string, Record<string, unknown>>).map(([id, entry]) => [id, toLayers(entry)]),
     )
-    state = { ...rest, ...splitBySource((results ?? {}) as TournamentResults), library }
+    state = { ...toLayers(state), library }
   }
   return state as unknown as TournamentStore
+}
+
+/**
+ * Moves an old `results` map into layers. Layers already there are kept,
+ * winning over old results for the same match: state saved by older code
+ * after a newer version ran (e.g. switching branches) can have both, and
+ * dropping the layers would lose picks and results.
+ */
+function toLayers<T extends Record<string, unknown>>(holder: T): Omit<T, 'results'> & ResultLayers {
+  const { results, ...rest } = holder
+  const split = splitBySource((results ?? {}) as TournamentResults)
+  const kept = rest as Partial<ResultLayers>
+  return { ...rest, actual: mergeLayer(split.actual, kept.actual), picks: mergeLayer(split.picks, kept.picks) }
+}
+
+/** Both layers' reports, with `over`'s winning for the same match. */
+function mergeLayer(under: TournamentResults, over: TournamentResults | undefined): TournamentResults {
+  const merged: TournamentResults = Object.fromEntries(Object.entries(under).map(([id, reports]) => [id, { ...reports }]))
+  for (const [stageId, reports] of Object.entries(over ?? {})) merged[stageId] = { ...merged[stageId], ...reports }
+  return merged
 }
 
 /** The results the current view is computed from. */

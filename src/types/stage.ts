@@ -108,6 +108,12 @@ export interface SwissConfig {
   tiebreakers: SwissTiebreaker[]
   /** Elo K-factor for live ratings: the most a rating can move in one match. Default 32. */
   ratingK?: number
+  /**
+   * Where live ratings start. 'ratings' (default): team ratings, or seed
+   * order if no team has one. 'seed': always seed order, as ESL Pro League
+   * does, so team ratings (e.g. from VRS) only drive the simulator.
+   */
+  ratingStart?: 'ratings' | 'seed'
 }
 
 export type StageConfig = SingleElimConfig | DoubleElimConfig | SwissConfig

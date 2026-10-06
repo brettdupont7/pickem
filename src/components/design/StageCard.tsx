@@ -249,9 +249,28 @@ function SwissSettings({ config, setConfig }: { config: SwissConfig; setConfig: 
           <Check label="Avoid rematches" checked={config.avoidRematches} onChange={(avoidRematches) => setConfig({ avoidRematches })} />
         </Field>
         {(config.pairing === 'rating' || config.tiebreakers.includes('rating')) && (
-          <Field label="Rating K-factor" hint="Most a live rating can move in one match. Starting ratings come from the Teams tab, or from seed order if no team has one.">
-            <NumberInput optional min={1} value={config.ratingK} placeholder={`${DEFAULT_RATING_K}`} label="Rating K-factor" onChange={(ratingK) => setConfig({ ratingK })} />
-          </Field>
+          <>
+            <Field
+              label="Start live ratings from"
+              hint={
+                config.ratingStart === 'seed'
+                  ? 'Seed order, as ESL Pro League does. Team ratings (e.g. from VRS) still drive the simulator.'
+                  : 'Team ratings from the Teams tab, or seed order if no team has one.'
+              }
+            >
+              <div className="segmented" role="group" aria-label="Start live ratings from">
+                <button className={config.ratingStart !== 'seed' ? 'is-active' : ''} onClick={() => setConfig({ ratingStart: undefined })}>
+                  Team ratings
+                </button>
+                <button className={config.ratingStart === 'seed' ? 'is-active' : ''} onClick={() => setConfig({ ratingStart: 'seed' })}>
+                  Seed order
+                </button>
+              </div>
+            </Field>
+            <Field label="Rating K-factor" hint="Most a live rating can move in one match.">
+              <NumberInput optional min={1} value={config.ratingK} placeholder={`${DEFAULT_RATING_K}`} label="Rating K-factor" onChange={(ratingK) => setConfig({ ratingK })} />
+            </Field>
+          </>
         )}
       </div>
       <Field label="Tiebreakers" hint="Rank teams with the same record, in this order.">

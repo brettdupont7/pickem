@@ -7,6 +7,22 @@ export function SimulatorBar({ activeStageId }: { activeStageId: StageId | null 
   const clearResults = useTournamentStore((s) => s.clearResults)
   const simulation = useTournamentStore((s) => s.simulation)
   const setOptions = useTournamentStore((s) => s.setSimulationOptions)
+  const view = useTournamentStore((s) => s.editSource)
+
+  // Simulations are predictions, so the actual results view only offers a reset.
+  if (view === 'actual')
+    return (
+      <div className="toolbar">
+        <span className="hint">Showing actual results only. Your picks are kept and shown under Picks.</span>
+        <span className="toolbar__spacer" />
+        <button
+          className="button button--ghost"
+          onClick={() => window.confirm('Clear every actual result? Your picks are kept.') && clearResults()}
+        >
+          Clear actual results
+        </button>
+      </div>
+    )
 
   return (
     <div className="toolbar">
@@ -50,9 +66,9 @@ export function SimulatorBar({ activeStageId }: { activeStageId: StageId | null 
       </button>
       <button
         className="button button--ghost"
-        onClick={() => window.confirm('Clear every pick, result and simulation?') && clearResults()}
+        onClick={() => window.confirm('Clear every pick and simulation? Actual results are kept.') && clearResults()}
       >
-        Reset all
+        Clear picks
       </button>
     </div>
   )

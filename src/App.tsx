@@ -54,9 +54,14 @@ export default function App() {
           ))}
           <option value="__manage">New or manage…</option>
         </select>
-        <div className="segmented" role="group" aria-label="Record edits as">
+        <div className="segmented" role="group" aria-label="Show and edit">
           {(['pick', 'actual'] as const).map((source) => (
-            <button key={source} className={editSource === source ? 'is-active' : ''} onClick={() => setEditSource(source)}>
+            <button
+              key={source}
+              className={editSource === source ? 'is-active' : ''}
+              onClick={() => setEditSource(source)}
+              title={source === 'pick' ? 'Your picks, with actual results on top' : 'Actual results only'}
+            >
               {source === 'pick' ? 'Picks' : 'Actual results'}
             </button>
           ))}

@@ -1,4 +1,4 @@
-import { describeMatch } from '../../engine'
+import { describeMatch, resolveForMatch } from '../../engine'
 import { useTournamentStore } from '../../store/tournament'
 import { useUiStore } from '../../store/ui'
 import type { Match, StageId } from '../../types'
@@ -28,6 +28,8 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
   const preview = useIsPreview()
   const scoring = useTournamentStore((s) => s.tournament.rules?.scoring)
   const pickWinner = useTournamentStore((s) => s.pickWinner)
+  const resultView = useTournamentStore((s) => s.editSource)
+  const storedPick = useTournamentStore((s) => s.picks[stageId]?.[match.id])
   const openEditor = useUiStore((s) => s.openEditor)
 
   // A match between two byes never happens. Keep a full-size invisible card
@@ -42,7 +44,12 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
     )
 
   const view = describeMatch(match, scoring)
-  const editable = !preview && (view.status === 'ready' || view.status === 'live' || view.status === 'decided')
+  // In the picks view, actual results are shown on top of picks and can only be changed in the actual view.
+  const locked = !preview && resultView === 'pick' && view.source === 'actual'
+  const editable = !preview && !locked && (view.status === 'ready' || view.status === 'live' || view.status === 'decided')
+  // The pick an actual result is hiding, marked right or wrong.
+  const pickedId = locked && storedPick ? resolveForMatch(storedPick, match, scoring).result?.winnerId : undefined
+  const pickRight = pickedId !== undefined && pickedId === match.result?.winnerId
   const singleGameScore = match.bestOf === 1 ? view.games[0]?.score : undefined
 
   const scoreFor = (slot: 0 | 1) => {
@@ -63,13 +70,28 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
         className={`match__team${won ? ' is-winner' : ''}${lost ? ' is-loser' : ''}`}
         disabled={!editable}
         onClick={() => teamId && pickWinner(stageId, match, teamId)}
-        title={editable ? (won ? `${name} — click to clear` : `Pick ${name}`) : name}
+        title={
+          editable
+            ? won
+              ? `${name} — click to clear`
+              : resultView === 'actual'
+                ? `${name} won`
+                : `Pick ${name}`
+            : locked
+              ? `${name} — actual result (change it in Actual results)`
+              : name
+        }
       >
         {variant === 'row' ? (
-          <TeamBadge team={team} />
+          // The mark sits on the badge's corner, so it stays inside the card on either side.
+          <span className="match__badge">
+            <TeamBadge team={team} />
+            {pickedId === teamId && <PickMark right={pickRight} name={name} />}
+          </span>
         ) : (
           <>
             <span className="match__name">{name}</span>
+            {pickedId === teamId && <PickMark right={pickRight} name={name} />}
             {score !== null && <span className="match__score">{score}</span>}
             {advance && <AdvanceMark advance={advance(slot)} />}
           </>
@@ -96,7 +118,7 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
     // Logos (or initials) only, as on HLTV; names are in the tooltips.
     const scores = [scoreFor(0), scoreFor(1)]
     return (
-      <div className={`match match--row match--${view.status}`}>
+      <div className={`match match--row match--${view.status}${locked ? ' match--locked' : ''}`}>
         {view.source && view.source !== 'bye' && (
           <span className={`source source--${view.source}`} title={`Result: ${view.source}`} />
         )}
@@ -120,7 +142,7 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
   }
 
   return (
-    <div className={`match match--${view.status}`}>
+    <div className={`match match--${view.status}${locked ? ' match--locked' : ''}`}>
       <div className="match__header">
         <span>Bo{match.bestOf}</span>
         {meta}
@@ -128,6 +150,16 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
       {teamButton(0)}
       {teamButton(1)}
     </div>
+  )
+}
+
+/** Marks the team the user picked, once the actual result is in. */
+function PickMark({ right, name }: { right: boolean; name: string }) {
+  const label = `Your pick: ${name} (${right ? 'right' : 'wrong'})`
+  return (
+    <span className={`pick-mark pick-mark--${right ? 'right' : 'wrong'}`} title={label} role="img" aria-label={label}>
+      {right ? '✓' : '✗'}
+    </span>
   )
 }
 

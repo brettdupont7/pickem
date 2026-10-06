@@ -1,14 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
 import { presets } from '../../data/presets'
-import { blankTournament, instantiate, parseTournamentFile, serializeTournament, slugify, validateTournament } from '../../engine'
+import { blankTournament, instantiate, parseTournamentFile, serializeTournament, slugify, validateTournament, type ResultLayers } from '../../engine'
 import { useTournamentStore } from '../../store/tournament'
 import { useUiStore } from '../../store/ui'
-import type { Tournament, TournamentResults } from '../../types'
+import type { Tournament } from '../../types'
 import { downloadFile } from './fields'
 
-interface Row {
+interface Row extends ResultLayers {
   tournament: Tournament
-  results: TournamentResults
   updatedAt?: number
   isOpen: boolean
 }
@@ -18,7 +17,8 @@ const formatDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { 
 /** Saved tournaments: open, duplicate, export, delete, plus new and import. */
 export function LibraryPanel() {
   const tournament = useTournamentStore((s) => s.tournament)
-  const results = useTournamentStore((s) => s.results)
+  const actual = useTournamentStore((s) => s.actual)
+  const picks = useTournamentStore((s) => s.picks)
   const library = useTournamentStore((s) => s.library)
   const { openTournament, createTournament, duplicateTournament, deleteTournament } = useTournamentStore()
   const closeEditor = useUiStore((s) => s.closeEditor)
@@ -28,22 +28,22 @@ export function LibraryPanel() {
 
   const rows: Row[] = useMemo(
     () => [
-      { tournament, results, isOpen: true },
+      { tournament, actual, picks, isOpen: true },
       ...Object.values(library)
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .map((e) => ({ ...e, isOpen: false })),
     ],
-    [tournament, results, library],
+    [tournament, actual, picks, library],
   )
 
-  const create = (t: Tournament, r?: TournamentResults) => {
+  const create = (t: Tournament, layers?: ResultLayers) => {
     closeEditor()
-    createTournament(t, r)
+    createTournament(t, layers)
     setMessage(null)
   }
 
-  const exportRow = ({ tournament: t, results: r }: Row) =>
-    downloadFile(`${slugify(t.name)}.json`, serializeTournament(t, withResults ? r : undefined))
+  const exportRow = ({ tournament: t, actual: a, picks: p }: Row) =>
+    downloadFile(`${slugify(t.name)}.json`, serializeTournament(t, withResults ? { actual: a, picks: p } : undefined))
 
   const remove = ({ tournament: t }: Row) => {
     if (window.confirm(`Delete ${t.name} and all its results? This can't be undone.`)) deleteTournament(t.id)
@@ -51,8 +51,8 @@ export function LibraryPanel() {
 
   const importFile = async (file: File) => {
     try {
-      const { tournament: t, results: r } = parseTournamentFile(await file.text())
-      create(instantiate(t), r)
+      const { tournament: t, layers } = parseTournamentFile(await file.text())
+      create(instantiate(t), layers)
       const issues = validateTournament(t)
       setMessage(
         issues.length

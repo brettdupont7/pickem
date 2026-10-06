@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addStage, phasesOf, validateTournament } from '../../engine'
+import { addStage, hasResults, phasesOf, validateTournament } from '../../engine'
 import { useTournamentStore } from '../../store/tournament'
 import type { StageId } from '../../types'
 import { Field, NumberInput } from './fields'
@@ -10,12 +10,13 @@ import { StageCard } from './StageCard'
 /** Edit the open tournament's name, rules and stages, and manage saved tournaments. */
 export function DesignPanel() {
   const tournament = useTournamentStore((s) => s.tournament)
-  const results = useTournamentStore((s) => s.results)
+  const actual = useTournamentStore((s) => s.actual)
+  const picks = useTournamentStore((s) => s.picks)
   const update = useTournamentStore((s) => s.updateTournament)
   const [open, setOpen] = useState<Set<StageId>>(new Set())
   const issues = useMemo(() => validateTournament(tournament), [tournament])
   const general = issues.filter((i) => !i.stageId)
-  const hasResults = Object.values(results).some((r) => Object.keys(r).length > 0)
+  const anyResults = hasResults(actual) || hasResults(picks)
 
   const toggle = (id: StageId) =>
     setOpen((cur) => {
@@ -61,7 +62,7 @@ export function DesignPanel() {
             </div>
           </Field>
         </div>
-        {hasResults && (
+        {anyResults && (
           <p className="hint">
             This tournament has picks or results. They're kept as you edit, but any that no longer fit the new design are ignored.
           </p>

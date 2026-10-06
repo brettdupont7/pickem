@@ -1007,22 +1007,26 @@ input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
-.teams__sort {
+.teams__sort,
+.sort-button {
   all: unset;
   cursor: pointer;
   font-weight: inherit;
 }
 
-.teams__sort:hover {
+.teams__sort:hover,
+.sort-button:hover {
   text-decoration: underline;
 }
 
-.teams__sort:focus-visible {
+.teams__sort:focus-visible,
+.sort-button:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
 
-.teams__sort-arrow {
+.teams__sort-arrow,
+.sort-button__arrow {
   display: inline-block;
   width: 1em;
   margin-left: 2px;
@@ -1460,4 +1464,10 @@ input[type='number'] {
   .toolbar__spacer {
     display: none;
   }
+}
+
+/* "advance" / "win" under each stage name in the odds table. */
+.odds__what {
+  display: block;
+  font-weight: normal;
 }

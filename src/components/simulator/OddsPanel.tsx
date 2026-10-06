@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createMonteCarlo, playOrder, type MonteCarloResult } from '../../engine'
 import { useTournamentStore, useViewResults } from '../../store/tournament'
 import type { StageId, Tournament } from '../../types'
 
 const TOTAL = 2000
 const CHUNK = 100
+
+/** Sort column for team names; any other column is a stage ID. */
+const TEAM = '\u0000team'
 
 const percent = (p: number) => (p === 0 ? '—' : p < 0.005 ? '<1%' : `${Math.round(p * 100)}%`)
 
@@ -28,6 +31,8 @@ export function OddsPanel() {
   const [odds, setOdds] = useState<MonteCarloResult | null>(null)
   const [running, setRunning] = useState(false)
   const [stale, setStale] = useState(false)
+  /** null: by chance of winning the event, then name. */
+  const [sort, setSort] = useState<{ column: string; desc: boolean } | null>(null)
   const cancel = useRef<() => void>()
 
   useEffect(() => {
@@ -75,13 +80,34 @@ export function OddsPanel() {
     return [...places].reduce((sum, place) => sum + (stageOdds.places[place - 1] ?? 0), 0)
   }
 
+  const name = (id: string) => tournament.teams[id].name
+  const chanceOrNone = (id: string, stageId: StageId) => ((odds?.teams[id]?.stages[stageId]?.entered ?? 0) > 0 ? stageChance(id, stageId) : -1)
+  const byDefault = (a: string, b: string) => (odds!.teams[b]?.champion ?? 0) - (odds!.teams[a]?.champion ?? 0) || name(a).localeCompare(name(b))
   const rows = odds
-    ? Object.keys(tournament.teams).sort(
-        (a, b) =>
-          (odds.teams[b]?.champion ?? 0) - (odds.teams[a]?.champion ?? 0) ||
-          tournament.teams[a].name.localeCompare(tournament.teams[b].name),
-      )
+    ? Object.keys(tournament.teams).sort((a, b) => {
+        if (!sort) return byDefault(a, b)
+        if (sort.column === TEAM) return sort.desc ? name(b).localeCompare(name(a)) : name(a).localeCompare(name(b))
+        const [ca, cb] = [chanceOrNone(a, sort.column), chanceOrNone(b, sort.column)]
+        // Teams that can't reach the stage stay at the bottom either way.
+        if ((ca < 0) !== (cb < 0)) return ca < 0 ? 1 : -1
+        return (sort.desc ? cb - ca : ca - cb) || byDefault(a, b)
+      })
     : []
+
+  const sortBy = (column: string) => {
+    // Chances start highest first and names A-Z; a third click goes back to the default order.
+    const firstDesc = column !== TEAM
+    setSort(sort?.column !== column ? { column, desc: firstDesc } : sort.desc === firstDesc ? { column, desc: !firstDesc } : null)
+  }
+
+  const header = (column: string, label: React.ReactNode) => (
+    <th aria-sort={sort?.column === column ? (sort.desc ? 'descending' : 'ascending') : undefined}>
+      <button className="sort-button" onClick={() => sortBy(column)} title="Sort by this column">
+        {label}
+        <span className="sort-button__arrow">{sort?.column === column ? (sort.desc ? '▼' : '▲') : ''}</span>
+      </button>
+    </th>
+  )
 
   return (
     <div className="odds">
@@ -102,12 +128,17 @@ export function OddsPanel() {
           <table className="odds__table">
             <thead>
               <tr>
-                <th>Team</th>
+                {header(TEAM, 'Team')}
                 {stages.map((s) => (
-                  <th key={s.id}>
-                    {s.name}
-                    <div className="muted">{advancing.has(s.id) ? 'advance' : 'win'}</div>
-                  </th>
+                  <Fragment key={s.id}>
+                    {header(
+                      s.id,
+                      <span>
+                        {s.name}
+                        <span className="muted odds__what">{advancing.has(s.id) ? 'advance' : 'win'}</span>
+                      </span>,
+                    )}
+                  </Fragment>
                 ))}
               </tr>
             </thead>

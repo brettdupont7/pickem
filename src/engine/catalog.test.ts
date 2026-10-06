@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tournament } from '../types'
-import { addFromCatalog, linkTeam, matchTeams, normalizeTeamName, parseVrsStandings, updateRatings } from './catalog'
+import { addFromCatalog, linkTeam, matchTeams, normalizeTeamName, parseVrsStandings, seedByRank, updateRatings } from './catalog'
 
 // Same layout as Valve's standings files, with made-up teams.
 const standings = (date: string, rows: [number, number, string, string][]) =>
@@ -89,5 +89,22 @@ describe('ratings from a catalog', () => {
     expect(t.teams[navi]).toMatchObject({ rating: 1990, ratingSource: { rank: 1, asOf: '2026-11-02' } })
     expect(t.teams[alpha]).toMatchObject({ rating: 2046, ratingSource: { asOf: '2026-10-05' } })
     expect(t.teams.manual).toEqual({ id: 'manual', name: 'manual', rating: 1400 })
+  })
+})
+
+describe('seedByRank', () => {
+  it('orders invited teams by rank, leaving places and unranked teams after', () => {
+    const { tournament: t, ids } = addFromCatalog(tournament({ unranked: {} }), october.entries.slice(0, 3), october)
+    const [alpha, navi, bravo] = ids
+    const placement = { kind: 'placement' as const, stageId: 'earlier', place: 1 }
+    const entrants = [{ kind: 'team' as const, teamId: 'unranked' }, { kind: 'team' as const, teamId: bravo }, placement, { kind: 'team' as const, teamId: alpha }, { kind: 'team' as const, teamId: navi }]
+    const seeded = seedByRank({ ...t, stages: [{ id: 's', name: 'S', phase: 1, config: { format: 'single-elim', bestOf: 1, seeding: 'standard', thirdPlaceMatch: false }, entrants }] }, 's')
+    expect(seeded.stages[0].entrants).toEqual([
+      { kind: 'team', teamId: alpha },
+      { kind: 'team', teamId: navi },
+      placement,
+      { kind: 'team', teamId: bravo },
+      { kind: 'team', teamId: 'unranked' },
+    ])
   })
 })

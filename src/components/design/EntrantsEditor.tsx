@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addBlankTeam, addTeams, formatRanges, placementUses, teamEntries, updateStage } from '../../engine'
+import { addBlankTeam, addTeams, formatRanges, placementUses, seedByRank, teamEntries, updateStage } from '../../engine'
 import type { EntrantSource, Stage, StageId, Tournament } from '../../types'
 import { PasteTeams } from '../common/PasteTeams'
 import { NumberInput } from './fields'
@@ -15,6 +15,9 @@ export function EntrantsEditor({ tournament, stage, update }: Props) {
   const [pasting, setPasting] = useState(false)
   const earlier = tournament.stages.filter((s) => s.phase < stage.phase)
   const entries = useMemo(() => teamEntries(tournament), [tournament])
+  // Offered once at least two invited teams have a ranking (e.g. VRS) to seed by.
+  const ranked = stage.entrants.flatMap((e) => (e.kind === 'team' && tournament.teams[e.teamId]?.ratingSource ? [tournament.teams[e.teamId].ratingSource!] : []))
+  const rankedCatalog = ranked.length >= 2 ? ranked[0].catalog.toUpperCase() : null
   const stageName = (id: StageId) => tournament.stages.find((s) => s.id === id)?.name ?? id
 
   const setEntrants = (fn: (entrants: EntrantSource[]) => EntrantSource[]) =>
@@ -136,6 +139,15 @@ export function EntrantsEditor({ tournament, stage, update }: Props) {
         <button className="button" onClick={() => setPasting(!pasting)}>
           Paste teams…
         </button>
+        {rankedCatalog && (
+          <button
+            className="button button--ghost"
+            onClick={() => update((t) => seedByRank(t, stage.id))}
+            title={`Order the invited teams by ${rankedCatalog} rank, best first, as CS2 Majors seed by VRS. Places from earlier stages keep their slots.`}
+          >
+            Seed by {rankedCatalog} rank
+          </button>
+        )}
         {stage.entrants.length > 0 && (
           <button className="button button--ghost" onClick={() => window.confirm(`Remove all entrants from ${stage.name}?`) && setEntrants(() => [])}>
             Clear

@@ -121,3 +121,22 @@ export function updateRatings(tournament: Tournament, catalog: Catalog): { tourn
   }
   return { tournament: next, updated, missing }
 }
+
+/**
+ * Re-seeds a stage's invited teams by ranking (best first), as CS2 Majors
+ * seed by VRS. Teams move only among the invited-team slots; places from
+ * earlier stages keep their slots, and unranked teams follow ranked ones.
+ */
+export function seedByRank(tournament: Tournament, stageId: string): Tournament {
+  const stage = tournament.stages.find((s) => s.id === stageId)
+  if (!stage) return tournament
+  const slots = stage.entrants.flatMap((e, i) => (e.kind === 'team' ? [i] : []))
+  const rank = (i: number) => {
+    const e = stage.entrants[i]
+    return (e.kind === 'team' && tournament.teams[e.teamId]?.ratingSource?.rank) || Infinity
+  }
+  const sorted = [...slots].sort((a, b) => rank(a) - rank(b) || a - b)
+  const entrants = [...stage.entrants]
+  slots.forEach((slot, n) => (entrants[slot] = stage.entrants[sorted[n]]))
+  return { ...tournament, stages: tournament.stages.map((s) => (s.id === stageId ? { ...s, entrants } : s)) }
+}

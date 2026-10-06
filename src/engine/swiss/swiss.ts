@@ -170,6 +170,7 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring, 
             rating,
             played: config.avoidRematches ? played : () => false,
             rng: roundRng,
+            round,
           })
 
     for (const [a, b] of pairs) {
@@ -266,11 +267,53 @@ interface PairingContext {
   rating: (id: TeamId) => number
   played: (a: TeamId, b: TeamId) => boolean
   rng: () => number
+  /** 0-based round being paired. */
+  round: number
+}
+
+/**
+ * The CS2 Major priority table for a group of 6 (Valve's Major supplemental
+ * rulebook): pairings by position in the group, best first.
+ */
+const MAJOR_PRIORITY_TABLE: [number, number][][] = [
+  [[1, 6], [2, 5], [3, 4]],
+  [[1, 6], [2, 4], [3, 5]],
+  [[1, 5], [2, 6], [3, 4]],
+  [[1, 5], [2, 4], [3, 6]],
+  [[1, 4], [2, 6], [3, 5]],
+  [[1, 4], [2, 5], [3, 6]],
+  [[1, 6], [2, 3], [4, 5]],
+  [[1, 5], [2, 3], [4, 6]],
+  [[1, 3], [2, 6], [4, 5]],
+  [[1, 3], [2, 5], [4, 6]],
+  [[1, 4], [2, 3], [5, 6]],
+  [[1, 3], [2, 4], [5, 6]],
+  [[1, 2], [3, 6], [4, 5]],
+  [[1, 2], [3, 5], [4, 6]],
+  [[1, 2], [3, 4], [5, 6]],
+]
+
+/** The top-most row of the Major table for 6 teams in rank order that has no rematch, or null. */
+export function pairByMajorTable(ids: TeamId[], played: (a: TeamId, b: TeamId) => boolean): Pair[] | null {
+  if (ids.length !== 6) return null
+  for (const row of MAJOR_PRIORITY_TABLE) {
+    const pairs = row.map(([x, y]): Pair => [ids[x - 1], ids[y - 1]])
+    if (pairs.every(([a, b]) => !played(a, b))) return pairs
+  }
+  return null
+}
+
+/** Pairs a group in rank order without rematches, or returns null. */
+function pairGroup(ids: TeamId[], config: SwissConfig, ctx: PairingContext): Pair[] | null {
+  // Majors use the table from round 4 (index 3); rounds 2-3 pair highest v lowest.
+  if (config.majorPriorityTable && ctx.round >= 3 && ids.length === 6) return pairByMajorTable(ids, ctx.played)
+  return pairUp(ids, ctx.played)
 }
 
 /**
  * Pairs teams within the same W-L record, best record first. Within a
- * group, the highest-ranked team plays the lowest-ranked one it hasn't met.
+ * group, the highest-ranked team plays the lowest-ranked one it hasn't met
+ * (or, with `majorPriorityTable`, groups of 6 follow the Major table).
  * When a group has an odd count, one team floats down to the next group.
  * Rematches only happen when a group can't be paired any other way. Groups
  * are paired one at a time, so on rare occasions a different pairing of a
@@ -303,7 +346,7 @@ function pairByRecord(active: TeamId[], config: SwissConfig, ctx: PairingContext
     const maxFloat = isLast ? 0 : minFloat + 2
     for (let float = minFloat; float <= maxFloat; float += 2) {
       for (const floated of floatCandidates(pool, float)) {
-        const paired = pairUp(pool.filter((id) => !floated.includes(id)), ctx.played)
+        const paired = pairGroup(pool.filter((id) => !floated.includes(id)), config, ctx)
         if (paired) {
           pairs.push(...paired)
           floaters = [...floated].reverse() // back to rank order

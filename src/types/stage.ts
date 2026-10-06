@@ -114,6 +114,12 @@ export interface SwissConfig {
    * does, so team ratings (e.g. from VRS) only drive the simulator.
    */
   ratingStart?: 'ratings' | 'seed'
+  /**
+   * From round 4 on, pair a group of exactly 6 teams with the CS2 Major
+   * priority table (1v6 2v5 3v4, then 1v6 2v4 3v5, ...): the top-most row
+   * without a rematch. Rounds 2-3 and other groups pair highest v lowest.
+   */
+  majorPriorityTable?: boolean
 }
 
 export type StageConfig = SingleElimConfig | DoubleElimConfig | SwissConfig

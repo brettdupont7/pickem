@@ -245,8 +245,13 @@ function SwissSettings({ config, setConfig }: { config: SwissConfig; setConfig: 
         <Field label="Later rounds" hint="Teams with the same record are paired by this.">
           <Select value={config.pairing} options={PAIRING} label="Later round pairing" onChange={(pairing) => setConfig({ pairing })} />
         </Field>
-        <Field label="Rematches">
+        <Field label="Rematches" hint={config.majorPriorityTable ? "From round 4, groups of 6 pair by Valve's Major priority table." : undefined}>
           <Check label="Avoid rematches" checked={config.avoidRematches} onChange={(avoidRematches) => setConfig({ avoidRematches })} />
+          <Check
+            label="Major priority table"
+            checked={!!config.majorPriorityTable}
+            onChange={(on) => setConfig({ majorPriorityTable: on || undefined })}
+          />
         </Field>
         {(config.pairing === 'rating' || config.tiebreakers.includes('rating')) && (
           <>

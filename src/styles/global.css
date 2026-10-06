@@ -374,6 +374,11 @@ input[type='number'] {
   font-weight: 600;
 }
 
+.match__team.is-expected {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .match__team.is-loser {
   border-left-color: var(--lose);
   color: var(--text-muted);
@@ -667,6 +672,26 @@ input[type='number'] {
 }
 
 /* Teams headed to a record before its pairings are made. */
+.waiting__qualified h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.waiting__teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.waiting__teams li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .match--arriving {
   border-style: dashed;
 }

@@ -2,6 +2,7 @@ import { ordinal, type ComputedStage } from '../../engine'
 import { useTournamentStore } from '../../store/tournament'
 import type { Stage } from '../../types'
 import { BracketView } from '../bracket/BracketView'
+import { TeamBadge } from './TeamBadge'
 import { SwissView } from '../swiss/SwissView'
 
 export function StageView({ stage, computed }: { stage: Stage; computed: ComputedStage }) {
@@ -13,8 +14,26 @@ export function StageView({ stage, computed }: { stage: Stage; computed: Compute
   }
 
   if (computed.status === 'waiting') {
+    const qualified = computed.qualified ?? []
+    const sources = [...new Set(qualified.map((q) => q.stageId))].map(stageName)
     return (
       <div className="waiting">
+        {qualified.length > 0 && (
+          <section className="waiting__qualified">
+            <h3>
+              Already through <span className="muted">· {qualified.length} of {stage.entrants.length}</span>
+            </h3>
+            <ul className="waiting__teams">
+              {qualified.map(({ teamId, stageId }) => (
+                <li key={teamId} title={`Certain to enter from ${stageName(stageId)}`}>
+                  <TeamBadge team={tournament.teams[teamId]} />
+                  {tournament.teams[teamId]?.name ?? teamId}
+                </li>
+              ))}
+            </ul>
+            <p className="hint">Seeds are set once {sources.join(' and ')} {sources.length === 1 ? 'finishes' : 'finish'}.</p>
+          </section>
+        )}
         <p className="hint">Waiting for earlier stages to finish. Entrants, in seed order:</p>
         <ol className="entrants">
           {stage.entrants.map((e, i) => (

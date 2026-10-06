@@ -32,6 +32,13 @@ export interface SwissState {
    * wait for the whole round, but where these teams go is already known.
    */
   upcoming: Record<TeamId, { wins: number; losses: number }>
+  /**
+   * Places (1-based, inclusive) each finished team can still end up in:
+   * advanced teams share the top places and eliminated teams the bottom
+   * ones. Left out for teams still playing, and for all teams when how many
+   * will advance isn't fixed yet.
+   */
+  places: Record<TeamId, [number, number]>
 }
 
 interface TeamRecord {
@@ -82,7 +89,62 @@ const byeMatchId = (teamId: TeamId, round: number): MatchId => `bye:${round}:${t
  * `seeds`, `config` and `results` alone. Generation stops at the first
  * round that has a match without a result.
  */
-export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring, ratings }: SwissInput): SwissState {
+export function computeSwiss(input: SwissInput): SwissState {
+  const state = computeRounds(input)
+  // Worked out on first read: it plays the stage out, and the simulator
+  // recomputes stages thousands of times without needing it.
+  let places: SwissState['places'] | undefined
+  return Object.defineProperty(state, 'places', {
+    enumerable: true,
+    get: () => (places ??= finishedPlaces(input, state)),
+  }) as SwissState
+}
+
+/**
+ * How many teams advance doesn't depend on results in a balanced Swiss
+ * (16 teams, 3 wins/3 losses: always 8), but can with odd groups. It's
+ * taken as fixed when playing the rest out with every favourite winning
+ * and with every underdog winning gives the same count.
+ */
+function finishedPlaces(input: SwissInput, state: Omit<SwissState, 'places'>): SwissState['places'] {
+  const n = input.seeds.length
+  if (state.complete) return Object.fromEntries(state.ranking.map((id, i) => [id, [i + 1, i + 1]]))
+  const counts = [true, false].map((favourites) => advancedAfterPlayout(input, favourites))
+  if (counts[0] === null || counts[0] !== counts[1]) return {}
+  const advancing = counts[0]
+  const places: SwissState['places'] = {}
+  for (const id of input.seeds) {
+    // Includes teams that finished in the round being played.
+    const record = state.upcoming[id] ?? state.standings[id]
+    if (!record) continue
+    const status = statusOfRecord(record, input.config)
+    if (status === 'advanced') places[id] = [1, advancing]
+    else if (status === 'eliminated') places[id] = [advancing + 1, n]
+  }
+  return places
+}
+
+const statusOfRecord = ({ wins, losses }: { wins: number; losses: number }, config: SwissConfig): SwissTeamStatus =>
+  wins >= config.winsToAdvance ? 'advanced' : losses >= config.lossesToEliminate ? 'eliminated' : 'active'
+
+/** How many teams advance if every open match goes to the better (or worse) seed. Null if it can't be played out. */
+function advancedAfterPlayout(input: SwissInput, favourites: boolean): number | null {
+  const seedOf = new Map(input.seeds.map((id, i) => [id, i]))
+  const results = { ...input.results }
+  for (let guard = 0; guard < 100; guard++) {
+    const state = computeRounds({ ...input, results })
+    if (state.complete) return input.seeds.filter((id) => statusOfRecord(state.standings[id], input.config) === 'advanced').length
+    for (const m of state.rounds.at(-1) ?? []) {
+      if (m.result) continue
+      const [a, b] = m.slots.map((s) => s.teamId!)
+      const better = seedOf.get(a)! < seedOf.get(b)! ? a : b
+      results[m.id] = { source: 'simulated', winnerId: favourites ? better : better === a ? b : a }
+    }
+  }
+  return null
+}
+
+function computeRounds({ seeds, config, results, randomSeed = 0, scoring, ratings }: SwissInput): Omit<SwissState, 'places'> {
   validate(seeds, config)
   const { winsToAdvance, lossesToEliminate } = config
 

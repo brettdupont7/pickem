@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { cs2Rules, footballRules, genericRules, valorantRules } from '../../data/presets'
-import { termsFor } from '../../engine'
+import { DEFAULT_FORM_K, termsFor } from '../../engine'
 import type { GameRules, GameScoring, Terms } from '../../types'
 import { Check, Field, NumberInput } from './fields'
 
@@ -153,6 +153,22 @@ export function RulesEditor({ rules, onChange }: { rules: GameRules | undefined;
           label="Upset floor (%)"
           onChange={(n) => onChange({ ...current, upsetFloor: n ? Math.min(50, n) / 100 : undefined })}
         />
+      </Field>
+
+      <Field
+        label="Form"
+        hint="Odds start from each team's rating and update it after every actual result, so they follow form between ranking releases. Picks don't count. K is the most one result can move a rating."
+      >
+        <div className="row">
+          <Check
+            label="Update ratings from actual results"
+            checked={!!current.formK}
+            onChange={(on) => onChange({ ...current, formK: on ? DEFAULT_FORM_K : undefined })}
+          />
+          {current.formK !== undefined && (
+            <NumberInput min={1} value={current.formK} label="Form K-factor" onChange={(k) => onChange({ ...current, formK: k ?? DEFAULT_FORM_K })} />
+          )}
+        </div>
       </Field>
 
       <Field label={`${terms.game} names (optional)`} hint={`One per line, e.g. a map pool. Offered when entering each ${terms.game.toLowerCase()}.`}>

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { createMonteCarlo, playOrder, type MonteCarloResult } from '../../engine'
+import { createMonteCarlo, playOrder, simulationRatings, type MonteCarloResult } from '../../engine'
 import { useTournamentStore, useViewResults } from '../../store/tournament'
 import type { StageId, Tournament } from '../../types'
 
@@ -26,6 +26,7 @@ function advancingPlaces(tournament: Tournament): Map<StageId, Set<number>> {
 export function OddsPanel() {
   const tournament = useTournamentStore((s) => s.tournament)
   const results = useViewResults()
+  const actual = useTournamentStore((s) => s.actual)
   const view = useTournamentStore((s) => s.editSource)
   const simulation = useTournamentStore((s) => s.simulation)
   const [odds, setOdds] = useState<MonteCarloResult | null>(null)
@@ -53,7 +54,7 @@ export function OddsPanel() {
 
   const run = () => {
     cancel.current?.()
-    const mc = createMonteCarlo(tournament, results, { ...simulation, seed: Date.now() })
+    const mc = createMonteCarlo(tournament, results, { ...simulation, ratings: simulationRatings(tournament, actual), seed: Date.now() })
     let stopped = false
     cancel.current = () => (stopped = true)
     setRunning(true)
@@ -119,6 +120,7 @@ export function OddsPanel() {
           {view === 'actual'
             ? 'Actual results stay fixed (your picks are ignored); everything else is simulated from team ratings'
             : 'Picks and actual results stay fixed; everything else is simulated from team ratings'}
+          {tournament.rules?.formK ? ', adjusted for form in actual results' : ''}
           {simulation.chaos ? ` with ${Math.round(simulation.chaos * 100)}% chaos` : ''}.
         </span>
         {stale && !running && <span className="badge badge--stale">Out of date</span>}

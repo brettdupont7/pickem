@@ -44,4 +44,10 @@ export interface GameRules {
    * underdogs still win about 10% of the time.
    */
   upsetFloor?: number
+  /**
+   * When set, the simulator starts each team from its rating and updates it
+   * by Elo with this K-factor after every actual result in the tournament,
+   * so odds follow form between ranking releases. Picks don't count.
+   */
+  formK?: number
 }

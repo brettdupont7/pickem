@@ -83,10 +83,11 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
         }
       >
         {variant === 'row' ? (
-          <>
+          // The mark sits on the badge's corner, so it stays inside the card on either side.
+          <span className="match__badge">
             <TeamBadge team={team} />
             {pickedId === teamId && <PickMark right={pickRight} name={name} />}
-          </>
+          </span>
         ) : (
           <>
             <span className="match__name">{name}</span>

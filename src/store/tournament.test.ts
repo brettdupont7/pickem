@@ -1,5 +1,21 @@
-import { describe, expect, it } from 'vitest'
-import { migrateStore } from './tournament'
+import { describe, expect, it, vi } from 'vitest'
+
+// The store persists to localStorage, which Node doesn't have. Hoisted so it
+// exists before the store module loads.
+vi.hoisted(() => {
+  const items = new Map<string, string>()
+  globalThis.localStorage = {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, value),
+    removeItem: (key: string) => void items.delete(key),
+    clear: () => items.clear(),
+    key: (i: number) => [...items.keys()][i] ?? null,
+    get length() {
+      return items.size
+    },
+  }
+})
+import { migrateStore, useTournamentStore } from './tournament'
 
 describe('migrateStore', () => {
   it('splits v2 results into actual results and picks, including the library', () => {
@@ -48,5 +64,26 @@ describe('migrateStore', () => {
   it('leaves current state alone', () => {
     const v3 = { tournament: {}, actual: {}, picks: {}, library: {} }
     expect(migrateStore(v3, 3)).toEqual(v3)
+  })
+})
+
+describe('duplicateTournament', () => {
+  it('copies picks and results, or just the design', () => {
+    const store = useTournamentStore.getState()
+    const original = store.tournament
+    useTournamentStore.setState({ actual: { s: { m: { source: 'actual', winnerId: 'a' } } }, picks: { s: { n: { source: 'pick', winnerId: 'b' } } } })
+
+    useTournamentStore.getState().duplicateTournament(original.id)
+    expect(useTournamentStore.getState().tournament.name).toBe(`${original.name} (2)`)
+    expect(useTournamentStore.getState().actual).toEqual({ s: { m: { source: 'actual', winnerId: 'a' } } })
+
+    useTournamentStore.getState().duplicateTournament(original.id, true)
+    const copy = useTournamentStore.getState()
+    expect(copy.tournament.name).toBe(`${original.name} (3)`)
+    expect(copy.tournament.stages).toEqual(original.stages)
+    expect(copy.actual).toEqual({})
+    expect(copy.picks).toEqual({})
+    // The original kept its results in the library.
+    expect(copy.library[original.id].picks).toEqual({ s: { n: { source: 'pick', winnerId: 'b' } } })
   })
 })

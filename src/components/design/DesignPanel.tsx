@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addStage, hasResults, phasesOf, validateTournament } from '../../engine'
+import { addStage, duplicatePhase, hasResults, phasesOf, validateTournament } from '../../engine'
 import { useTournamentStore } from '../../store/tournament'
 import type { StageId } from '../../types'
 import { Field, NumberInput } from './fields'
@@ -101,7 +101,16 @@ export function DesignPanel() {
         </p>
         {phasesOf(tournament.stages).map((phase) => (
           <div key={phase} className="phase">
-            <h3 className="phase__title">Phase {phase + 1}</h3>
+            <div className="phase__header">
+              <h3 className="phase__title">Phase {phase + 1}</h3>
+              <button
+                className="button button--ghost"
+                onClick={() => update((t) => duplicatePhase(t, phase).tournament)}
+                title="Copy every stage in this phase into a new phase right after it"
+              >
+                Duplicate phase
+              </button>
+            </div>
             {tournament.stages
               .filter((s) => s.phase === phase)
               .map((stage) => (

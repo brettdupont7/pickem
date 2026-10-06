@@ -29,7 +29,8 @@ Your tournaments, picks and results are saved in the browser (localStorage), so 
 Use the dropdown in the header to switch between your saved tournaments. Each one keeps its own picks and results. Choose **New or manage…** to open the library in the **Design** tab, where you can:
 
 - start a new tournament, either blank (8 teams, single elimination) or from a preset
-- duplicate, export or delete a tournament
+- duplicate a tournament with its picks and results (**Duplicate**), or just its format and teams (**Duplicate design**), e.g. to set up next season
+- export or delete a tournament
 - import a tournament file
 
 | Preset | Structure |
@@ -91,6 +92,7 @@ The **Design** tab edits the open tournament. Changes apply straight away, and t
   - **Game names:** an optional list, such as a map pool.
   - **Load a rule set** fills these in for CS2, Valorant, American football or a generic sport.
 - **Stages:** grouped by phase. Click a stage to expand it. Each badge shows how many problems the stage has.
+  - **Duplicating:** **⧉** on a stage copies it into the same phase, and **Duplicate phase** copies every stage in a phase into a new phase right after it. Copies keep the format and settings, and get entrants that work straight away: places from another stage move to the next free places (a copy of a playoff taking 1st–8th takes 9th–16th), and invited teams, or places with none left, become new placeholder teams to rename.
   - **Name, format and phase.** Switching format keeps the best-of and seeding. Choose **New phase at the end** to move a stage after everything else.
   - **Format settings:**
     - **Swiss:** wins and losses, best-ofs, pairing, rematches and tiebreakers (ordered).

@@ -50,7 +50,8 @@ interface TournamentStore extends ResultLayers {
   openTournament: (id: string) => void
   /** Adds a tournament to the library (renamed if the name is taken) and opens it. */
   createTournament: (tournament: Tournament, layers?: ResultLayers) => void
-  duplicateTournament: (id: string) => void
+  /** Copies a tournament and opens the copy; with `designOnly`, without picks or results. */
+  duplicateTournament: (id: string, designOnly?: boolean) => void
   /** Deletes a tournament. Deleting the open one opens the most recent other, or a blank one. */
   deleteTournament: (id: string) => void
   /** Edits the tournament's design, keeping results (ones that no longer fit are ignored). */
@@ -121,11 +122,11 @@ export const useTournamentStore = create<TournamentStore>()(
           if (id !== get().tournament.id) open(id, stashed())
         },
         createTournament,
-        duplicateTournament: (id) => {
+        duplicateTournament: (id, designOnly = false) => {
           const source = id === get().tournament.id ? get() : get().library[id]
           if (!source) return
-          const { actual, picks } = structuredClone({ actual: source.actual, picks: source.picks })
-          createTournament({ ...structuredClone(source.tournament), id: `${id}-copy` }, { actual, picks })
+          const layers = designOnly ? emptyLayers() : structuredClone({ actual: source.actual, picks: source.picks })
+          createTournament({ ...structuredClone(source.tournament), id: `${id}-copy` }, layers)
         },
         deleteTournament: (id) => {
           const { tournament, library } = get()

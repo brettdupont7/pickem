@@ -5,6 +5,7 @@ import {
   defaultConfig,
   describeConfig,
   describeEntrants,
+  duplicateStage,
   eliminationRounds,
   FORMAT_LABEL,
   formatRanges,
@@ -135,6 +136,14 @@ export function StageCard({ tournament, stage, issues, open, onToggle, update }:
               </button>
             </>
           )}
+          <button
+            className="icon-button"
+            onClick={() => update((t) => duplicateStage(t, stage.id).tournament)}
+            aria-label={`Duplicate ${stage.name}`}
+            title="Duplicate stage (same phase; entrants take the next free places or new placeholder teams)"
+          >
+            ⧉
+          </button>
           <button className="icon-button" onClick={remove} aria-label={`Delete ${stage.name}`} title="Delete stage">
             ✕
           </button>

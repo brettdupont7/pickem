@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addBlankTeam, addTeams, removeTeam, renameTeams, teamEntries } from '../../engine'
+import { addBlankTeam, addTeams, formRatings, removeTeam, renameTeams, teamEntries } from '../../engine'
 import { useTournamentState, useTournamentStore } from '../../store/tournament'
 import type { ComputedStage } from '../../engine'
 import type { Stage, StageId, SwissConfig, Team, TeamId } from '../../types'
@@ -7,14 +7,14 @@ import { PasteTeams } from './PasteTeams'
 import { TeamBadge } from './TeamBadge'
 import { formatAsOf, VrsPanel } from './VrsPanel'
 
-type SortKey = 'name' | 'rating' | 'live'
+type SortKey = 'name' | 'rating' | 'form' | 'live'
 
 interface Sort {
   key: SortKey
   desc: boolean
 }
 
-const SORT_LABEL: Record<SortKey, string> = { name: 'Name', rating: 'Rating', live: 'Live' }
+const SORT_LABEL: Record<SortKey, string> = { name: 'Name', rating: 'Rating', form: 'Form', live: 'Live' }
 
 export function TeamsPanel() {
   const tournament = useTournamentStore((s) => s.tournament)
@@ -24,6 +24,9 @@ export function TeamsPanel() {
   const entries = useMemo(() => teamEntries(tournament), [tournament])
   const stageName = (id: string) => tournament.stages.find((s) => s.id === id)?.name ?? id
   const state = useTournamentState()
+  const actual = useTournamentStore((s) => s.actual)
+  // Ratings after actual results, when the tournament's rules switch form on.
+  const form = useMemo(() => (tournament.rules?.formK ? formRatings(tournament, actual) : null), [tournament, actual])
   const live = useMemo(() => liveRatings(tournament.stages, state.stages), [tournament.stages, state.stages])
   // The order is fixed when a header is clicked, so rows don't jump while a rating is being typed.
   const [sort, setSort] = useState<Sort | null>(null)
@@ -35,7 +38,8 @@ export function TeamsPanel() {
     const next = sort?.key !== key ? { key, desc: firstDesc } : sort.desc === firstDesc ? { key, desc: !firstDesc } : null
     setSort(next)
     if (!next) return
-    const value = (team: Team) => (key === 'name' ? team.name : key === 'rating' ? team.rating : live.get(team.id)?.rating)
+    const value = (team: Team) =>
+      key === 'name' ? team.name : key === 'rating' ? team.rating : key === 'form' ? form?.[team.id] : live.get(team.id)?.rating
     setOrder(
       Object.values(teams)
         .sort((a, b) => {
@@ -107,6 +111,7 @@ export function TeamsPanel() {
               <th>Short name</th>
               <th>Logo URL</th>
               {header('rating')}
+              {form && header('form')}
               {header('live')}
               <th>Source</th>
               <th>Enters in</th>
@@ -154,6 +159,17 @@ export function TeamsPanel() {
                     }
                   />
                 </td>
+                {form && (
+                  <td className="teams__live" title="Rating after this tournament's actual results; the odds use this">
+                    {Math.round(form[team.id])}
+                    {team.rating !== undefined && Math.round(form[team.id]) !== Math.round(team.rating) && (
+                      <span className={`teams__delta ${form[team.id] > team.rating ? 'is-up' : 'is-down'}`}>
+                        {form[team.id] > team.rating ? '+' : ''}
+                        {Math.round(form[team.id] - team.rating)}
+                      </span>
+                    )}
+                  </td>
+                )}
                 <td className="teams__live muted" title={live.has(team.id) ? `Live rating in ${live.get(team.id)!.stage}` : undefined}>
                   {live.has(team.id) ? Math.round(live.get(team.id)!.rating) : '—'}
                 </td>

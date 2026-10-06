@@ -1040,6 +1040,19 @@ input[type='number'] {
   margin: 8px 0;
 }
 
+.teams__delta {
+  margin-left: 6px;
+  font-size: 0.85em;
+}
+
+.teams__delta.is-up {
+  color: var(--win);
+}
+
+.teams__delta.is-down {
+  color: var(--lose);
+}
+
 .teams__source {
   white-space: nowrap;
 }

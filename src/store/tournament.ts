@@ -14,6 +14,7 @@ import {
   setGame,
   setSeriesScore,
   simulate,
+  simulationRatings,
   splitBySource,
   uniqueName,
   viewResults,
@@ -161,7 +162,8 @@ export const useTournamentStore = create<TournamentStore>()(
             if (editSource !== 'pick') return {}
             const viewed = viewResults(tournament, { actual, picks }, 'pick')
             // A fresh seed each time so repeated clicks give different outcomes.
-            const next = simulate(tournament, viewed, scope, { ...simulation, seed: Date.now() })
+            const ratings = simulationRatings(tournament, actual)
+            const next = simulate(tournament, viewed, scope, { ...simulation, ratings, seed: Date.now() })
             return { picks: absorbPicks(picks, next) }
           }),
         clearSimulated: () => set(({ picks }) => ({ picks: clearSimulated(picks) })),

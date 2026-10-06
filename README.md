@@ -43,7 +43,11 @@ Teams in the presets are placeholders. To rename them all at once, paste a list 
 ### Make picks and record results
 
 - **Click a team** in any match to pick it as the winner. Click it again to clear the pick. Later rounds update immediately, and if you change an earlier pick, results that no longer make sense are dropped automatically.
-- **Picks vs Actual results:** the switch in the header sets how your edits are recorded. Use **Picks** for predictions and **Actual results** for real outcomes. A colored dot on each match shows its source: blue for a pick, green for an actual result, purple for a simulated one.
+- **Picks vs Actual results:** picks and actual results are stored separately, so recording what really happened never overwrites a prediction. The switch in the header picks which one you see and edit:
+  - **Actual results** shows only real outcomes. Your picks are hidden, and clicking a team records the actual result.
+  - **Picks** shows your picks, with every decided actual result on top. Actual results are locked here (change them under Actual results), so later rounds follow reality as far as it's known and your picks after that. Where you'd picked a match that's now decided, a **✓** or **✗** next to the team you picked shows whether you got it right. An actual match that's still in progress doesn't hide your pick.
+
+  A colored dot on each match shows its source: blue for a pick, green for an actual result, purple for a simulated one.
 - **Detailed scores:** click **✎** on a match (in the Swiss grid, hover the middle of the match) to open the score editor. From there you can:
   - pick or clear the winner
   - set a series score, e.g. 2–1
@@ -57,24 +61,24 @@ Teams in the presets are placeholders. To rename them all at once, paste a list 
   - **Swiss stages** use the HLTV-style web. Records branch out from 0:0, green and red arrows show where winners and losers go, and advanced and eliminated teams collect in boxes along the top and bottom. Rounds not reached yet show placeholders.
   - **Elimination stages** show the bracket by round, with lines from each match to the one its winner plays next. The lines turn green once the winner is decided. Double elimination shows the upper and lower brackets separately, with the grand final to the right of both. Reseeded rounds have no lines, since opponents aren't fixed in advance. Once a match is decided, a mark next to each team's score shows where it goes: a green **→** if it plays on (to its next match, or to a later stage once its place is certain), a red **↓** if it drops to the lower bracket or the 3rd place match, and nothing if it's out. Hover a mark for details. Once a stage is done, **Final placings** lists every team's place and which later stage it goes to.
   - **Waiting stages** list their entrants, e.g. "3rd in Stage 1".
-- **Odds:** runs 2,000 simulations of the rest of the event. For each team it shows the chance of advancing from each stage, and of winning the last one. Your picks and actual results are kept fixed, so the odds reflect them.
+- **Odds:** runs 2,000 simulations of the rest of the event. For each team it shows the chance of advancing from each stage, and of winning the last one. It uses whichever view is selected: under **Picks**, your picks and actual results are kept fixed; under **Actual results**, only actual results are, so the odds show the real-world outlook.
 - **Teams:** add, remove and edit teams: name, short name, logo URL and rating. The short name or logo is shown in the Swiss grid (initials are used when blank). Ratings drive the simulator; blank means 1500. They're also the starting ratings for Swiss stages paired by live rating, and the **Live** column shows each team's current live rating. Click the **Name**, **Rating** or **Live** header to sort (click again to reverse, a third time to restore the original order). **Paste team names…** takes one name per line and either renames the existing teams in order or adds them as new teams.
 - **Design:** the tournament library and the designer (see below).
 
 ### Simulate
 
-The **Simulate** bar fills in matches that don't have a result:
+The **Simulate** bar (under **Picks** only, since simulated results are predictions) fills in matches that don't have a result:
 
 - **Next round:** every match that can be played right now
 - **This stage:** the rest of the selected stage
 - **Everything:** the rest of the tournament
 
-Picks and actual results are never overwritten. Matches in progress are played out from their current score.
+Picks and actual results are never overwritten, and simulated results are stored with your picks. A match you have partly scored as a pick is played out from its current score.
 
 - **Chaos:** 0 means ratings decide the odds, and 100 makes every game a coin flip.
 - **Detail:** full scores, series scores only, or winners only.
 - **Clear simulated:** removes only simulated results.
-- **Reset all:** clears everything.
+- **Clear picks:** clears every pick and simulation, keeping actual results. Under **Actual results**, **Clear actual results** does the reverse.
 
 ## Designing a tournament
 
@@ -105,7 +109,7 @@ The **Design** tab edits the open tournament. Changes apply straight away, and t
 
 ### Tournament files
 
-**Export** saves a tournament as JSON, with its picks and results unless you untick **Include picks and results when exporting**. **Import** loads a file as a new tournament. It accepts an exported file or a bare tournament object, and fills in any stage settings that are missing with defaults.
+**Export** saves a tournament as JSON, with its picks and actual results (kept separately) unless you untick **Include picks and results when exporting**. **Import** loads a file as a new tournament. It accepts an exported file, including ones from before picks and results were separated, or a bare tournament object, and fills in any stage settings that are missing with defaults.
 
 ## How tournaments are described
 

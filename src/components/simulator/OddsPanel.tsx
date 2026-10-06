@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createMonteCarlo, playOrder, type MonteCarloResult } from '../../engine'
-import { useTournamentStore } from '../../store/tournament'
+import { useTournamentStore, useViewResults } from '../../store/tournament'
 import type { StageId, Tournament } from '../../types'
 
 const TOTAL = 2000
@@ -22,7 +22,8 @@ function advancingPlaces(tournament: Tournament): Map<StageId, Set<number>> {
 
 export function OddsPanel() {
   const tournament = useTournamentStore((s) => s.tournament)
-  const results = useTournamentStore((s) => s.results)
+  const results = useViewResults()
+  const view = useTournamentStore((s) => s.editSource)
   const simulation = useTournamentStore((s) => s.simulation)
   const [odds, setOdds] = useState<MonteCarloResult | null>(null)
   const [running, setRunning] = useState(false)
@@ -34,6 +35,14 @@ export function OddsPanel() {
     // Only when the inputs change, not when new odds arrive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournament, results, simulation.chaos])
+
+  // Odds from the other view don't apply to this one.
+  useEffect(() => {
+    cancel.current?.()
+    setRunning(false)
+    setOdds(null)
+    setStale(false)
+  }, [view])
 
   useEffect(() => () => cancel.current?.(), [])
 
@@ -81,7 +90,9 @@ export function OddsPanel() {
           {running ? `Simulating… ${odds?.iterations ?? 0}/${TOTAL}` : `Run ${TOTAL.toLocaleString()} simulations`}
         </button>
         <span className="hint">
-          Picks and actual results stay fixed; everything else is simulated from team ratings
+          {view === 'actual'
+            ? 'Actual results stay fixed (your picks are ignored); everything else is simulated from team ratings'
+            : 'Picks and actual results stay fixed; everything else is simulated from team ratings'}
           {simulation.chaos ? ` with ${Math.round(simulation.chaos * 100)}% chaos` : ''}.
         </span>
         {stale && !running && <span className="badge badge--stale">Out of date</span>}

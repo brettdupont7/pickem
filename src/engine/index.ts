@@ -9,3 +9,4 @@ export { computeStageIn, computeTournament, playOrder, validateTournament } from
 export type { ComputedStage, StageStatus, TournamentIssue, TournamentState } from './tournament'
 export * from './design'
 export * from './io'
+export * from './layers'

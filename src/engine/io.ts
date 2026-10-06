@@ -1,21 +1,30 @@
 import type { EntrantSource, Stage, StageConfig, Team, Tournament, TournamentResults } from '../types'
 import { defaultConfig } from './design'
+import { emptyLayers, hasResults, splitBySource, type ResultLayers } from './layers'
 
-/** Tournament files: a tournament, optionally with its results. */
+/**
+ * Tournament files: a tournament, optionally with its results.
+ * Version 1 kept picks and actual results together in `results`; since
+ * version 2, `results` holds actual results and `picks` holds predictions.
+ */
 
 export const FILE_FORMAT = 'pickem-tournament'
-export const FILE_VERSION = 1
+export const FILE_VERSION = 2
 
 export interface TournamentFile {
   format: typeof FILE_FORMAT
   version: number
   tournament: Tournament
+  /** Actual results. */
   results?: TournamentResults
+  /** Picks and simulated results. */
+  picks?: TournamentResults
 }
 
-export function serializeTournament(tournament: Tournament, results?: TournamentResults): string {
+export function serializeTournament(tournament: Tournament, layers?: ResultLayers): string {
   const file: TournamentFile = { format: FILE_FORMAT, version: FILE_VERSION, tournament }
-  if (results && Object.keys(results).length > 0) file.results = results
+  if (layers && hasResults(layers.actual)) file.results = layers.actual
+  if (layers && hasResults(layers.picks)) file.picks = layers.picks
   return JSON.stringify(file, null, 2)
 }
 
@@ -64,7 +73,7 @@ function parseStage(value: unknown, index: number): Stage {
  * enough for the app to load it; use `validateTournament` for mistakes in
  * the design itself. Throws an Error with a readable message.
  */
-export function parseTournamentFile(text: string): { tournament: Tournament; results: TournamentResults } {
+export function parseTournamentFile(text: string): { tournament: Tournament; layers: ResultLayers } {
   let data: unknown
   try {
     data = JSON.parse(text)
@@ -82,6 +91,9 @@ export function parseTournamentFile(text: string): { tournament: Tournament; res
     teams: parseTeams(raw.teams),
     stages: raw.stages.map(parseStage),
   }
-  const results = data.format === FILE_FORMAT && isObject(data.results) ? (data.results as TournamentResults) : {}
-  return { tournament, results }
+  if (data.format !== FILE_FORMAT) return { tournament, layers: emptyLayers() }
+  const results = isObject(data.results) ? (data.results as TournamentResults) : {}
+  const picks = isObject(data.picks) ? (data.picks as TournamentResults) : {}
+  const layers = typeof data.version === 'number' && data.version >= 2 ? { actual: results, picks } : splitBySource(results)
+  return { tournament, layers }
 }

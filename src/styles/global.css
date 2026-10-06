@@ -371,6 +371,27 @@ input[type='number'] {
   color: var(--text-muted);
 }
 
+/* Actual results in the picks view: not editable there, but not greyed out either. */
+.match--locked .match__team:disabled:not(.is-loser) {
+  color: inherit;
+}
+
+/* The user's pick on a match the actual result has decided. */
+.pick-mark {
+  flex: none;
+  font-size: 0.8em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pick-mark--right {
+  color: var(--win);
+}
+
+.pick-mark--wrong {
+  color: var(--lose);
+}
+
 .match__name {
   flex: 1;
   overflow: hidden;
@@ -546,6 +567,7 @@ input[type='number'] {
 }
 
 .match--row .match__team {
+  position: relative;
   justify-content: center;
   padding: 2px;
   border-left: 0;
@@ -566,6 +588,15 @@ input[type='number'] {
 
 .match--row .match__team.is-loser .team-badge {
   opacity: 0.4;
+}
+
+.match--row .pick-mark {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  padding: 1px 2px;
+  border-radius: 4px;
+  background: var(--surface);
 }
 
 .match--row .source {

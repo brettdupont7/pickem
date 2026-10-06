@@ -26,6 +26,12 @@ export interface SwissState {
   /** Every team ranked best to worst (index 0 = place 1). Final once `complete`. */
   ranking: TeamId[]
   complete: boolean
+  /**
+   * Teams whose match in the round being played is already decided, with
+   * the record they'll hold once the round finishes. Next round's pairings
+   * wait for the whole round, but where these teams go is already known.
+   */
+  upcoming: Record<TeamId, { wins: number; losses: number }>
 }
 
 interface TeamRecord {
@@ -134,6 +140,7 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring, 
   const recordLabel = (id: TeamId) => `${rec(id).wins}-${rec(id).losses}`
 
   const rounds: Match[][] = []
+  const upcoming: SwissState['upcoming'] = {}
   // Each round every active team gains a win or a loss, so this bounds the stage.
   const maxRounds = winsToAdvance + lossesToEliminate - 1
 
@@ -192,7 +199,16 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring, 
     }
 
     rounds.push(matches)
-    if (matches.some((m) => !m.result)) break
+    if (matches.some((m) => !m.result)) {
+      for (const m of matches) {
+        if (!m.result) continue
+        const winner = m.result.winnerId
+        upcoming[winner] = { wins: rec(winner).wins + 1, losses: rec(winner).losses }
+        const loser = m.slots.map((s) => s.teamId).find((id) => id && id !== winner)
+        if (loser) upcoming[loser] = { wins: rec(loser).wins, losses: rec(loser).losses + 1 }
+      }
+      break
+    }
 
     for (const match of matches) {
       const [a, b] = match.slots.map((s) => s.teamId)
@@ -231,6 +247,7 @@ export function computeSwiss({ seeds, config, results, randomSeed = 0, scoring, 
     status,
     ranking: [...seeds].sort(compareRank),
     complete: seeds.every((id) => statusOf(id) !== 'active'),
+    upcoming,
   }
 }
 

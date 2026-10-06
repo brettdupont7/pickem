@@ -266,6 +266,14 @@ input[type='number'] {
   background: var(--surface-3);
 }
 
+/* A Swiss record whose pairings wait on the round before. */
+.badge--tbd {
+  margin-left: 6px;
+  vertical-align: middle;
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
 /* Match card */
 
 .stage {
@@ -656,6 +664,21 @@ input[type='number'] {
 .match--placeholder .match__team {
   display: flex;
   cursor: default;
+}
+
+/* Teams headed to a record before its pairings are made. */
+.match--arriving {
+  border-style: dashed;
+}
+
+.match--arriving .match__team {
+  display: flex;
+  cursor: default;
+}
+
+.match--arriving .match__vs {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .team-badge {

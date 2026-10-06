@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ComputedStage } from '../../engine'
 import { useTeams } from '../common/preview'
-import type { Match, Stage, SwissConfig, TeamId } from '../../types'
+import type { Match, Stage, SwissConfig, Team, TeamId } from '../../types'
 import { MatchCard, PlaceholderRow } from '../common/MatchCard'
 import { TeamBadge } from '../common/TeamBadge'
 
@@ -79,14 +79,21 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
   const [arrows, setArrows] = useState<Arrow[]>([])
   const [size, setSize] = useState({ width: 0, height: 0 })
 
-  const finishedAt = (wins: number, losses: number): TeamId[] =>
-    computed.ranking.filter((id) => {
+  /** Teams decided in the round being played, headed for this record (best-ranked first). */
+  const upcomingAt = (wins: number, losses: number): TeamId[] =>
+    computed.ranking.filter((id) => swiss.upcoming[id]?.wins === wins && swiss.upcoming[id]?.losses === losses)
+
+  // Includes teams that just reached this record in the round being played.
+  const finishedAt = (wins: number, losses: number): TeamId[] => [
+    ...computed.ranking.filter((id) => {
       const s = swiss.standings[id]
       return s.wins === wins && s.losses === losses
-    })
+    }),
+    ...upcomingAt(wins, losses),
+  ]
 
   // Redraw arrows whenever the layout may have moved.
-  const layoutKey = swiss.rounds.map((r) => r.length).join(',') + '|' + computed.ranking.join(',')
+  const layoutKey = swiss.rounds.map((r) => r.length).join(',') + '|' + computed.ranking.join(',') + '|' + Object.keys(swiss.upcoming).join(',')
   useLayoutEffect(() => {
     const root = container.current
     if (!root) return
@@ -146,11 +153,18 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
     const matches = matchesByRecord(round).get(cell.key) ?? []
     // Once a round is paired, a record with no matches doesn't occur.
     if (round && matches.length === 0) return null
-    const placeholders = round ? 0 : Math.max(1, Math.round(cell.expected / 2))
+    // Teams already headed here; their opponents are paired once the round before finishes.
+    const arriving = round ? [] : upcomingAt(cell.wins, cell.losses)
+    const rows = round ? 0 : Math.max(1, Math.round(cell.expected / 2), Math.ceil(arriving.length / 2))
     return (
       <div key={cell.key} ref={ref(cell.key)} className="web-cell">
         <div className="web-cell__title">
           {cell.wins}:{cell.losses}
+          {arriving.length > 0 && (
+            <span className="badge badge--tbd" title="These teams are headed here; who plays whom is decided once the current round finishes.">
+              TBD
+            </span>
+          )}
         </div>
         {matches.map((m) =>
           m.slots[1].isBye ? (
@@ -167,9 +181,11 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
             <MatchCard key={m.id} stageId={stage.id} match={m} variant="row" />
           ),
         )}
-        {Array.from({ length: placeholders }, (_, i) => (
-          <PlaceholderRow key={i} />
-        ))}
+        {arriving.length > 0
+          ? Array.from({ length: rows }, (_, i) => (
+              <ArrivingRow key={i} teams={[arriving[2 * i], arriving[2 * i + 1]].map((id) => (id ? teams[id] : undefined))} />
+            ))
+          : Array.from({ length: rows }, (_, i) => <PlaceholderRow key={i} />)}
       </div>
     )
   }
@@ -221,6 +237,23 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
           <div className="swiss-web__bottom">{column.filter((x) => x.kind === 'eliminated').map(renderFinished)}</div>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Two slots of a record whose pairings aren't made yet, holding teams already headed there. */
+function ArrivingRow({ teams }: { teams: (Team | undefined)[] }) {
+  return (
+    <div className="match match--row match--arriving" aria-label="Not paired yet">
+      <span className="match__team" title={teams[0]?.name ?? 'To be decided'}>
+        <TeamBadge team={teams[0]} />
+      </span>
+      <div className="match__center">
+        <span className="match__vs">TBD</span>
+      </div>
+      <span className="match__team" title={teams[1]?.name ?? 'To be decided'}>
+        <TeamBadge team={teams[1]} />
+      </span>
     </div>
   )
 }

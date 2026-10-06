@@ -124,6 +124,37 @@ export function RulesEditor({ rules, onChange }: { rules: GameRules | undefined;
         ))}
       </div>
 
+      <Field
+        label="Ratings predict"
+        hint={`What a rating gap means in the simulator. CS2's VRS points predict a best-of-3; the simulator then works out the chance of winning each ${terms.game.toLowerCase()}.`}
+      >
+        <div className="segmented" role="group" aria-label="Ratings predict">
+          <button
+            className={current.ratingBasis !== 'series' ? 'is-active' : ''}
+            onClick={() => onChange({ ...current, ratingBasis: undefined })}
+          >
+            One {terms.game.toLowerCase()}
+          </button>
+          <button className={current.ratingBasis === 'series' ? 'is-active' : ''} onClick={() => onChange({ ...current, ratingBasis: 'series' })}>
+            A best-of-3
+          </button>
+        </div>
+      </Field>
+
+      <Field
+        label="Upset floor (%)"
+        hint="The least chance an underdog has, however big the rating gap. 10% matches how often big VRS underdogs actually win."
+      >
+        <NumberInput
+          optional
+          min={0}
+          value={current.upsetFloor ? Math.round(current.upsetFloor * 100) : undefined}
+          placeholder="0"
+          label="Upset floor (%)"
+          onChange={(n) => onChange({ ...current, upsetFloor: n ? Math.min(50, n) / 100 : undefined })}
+        />
+      </Field>
+
       <Field label={`${terms.game} names (optional)`} hint={`One per line, e.g. a map pool. Offered when entering each ${terms.game.toLowerCase()}.`}>
         <GamePool
           key={(current.gamePool ?? []).join('\n')}

@@ -5,6 +5,7 @@ import type { ComputedStage } from '../../engine'
 import type { Stage, StageId, SwissConfig, Team, TeamId } from '../../types'
 import { PasteTeams } from './PasteTeams'
 import { TeamBadge } from './TeamBadge'
+import { formatAsOf, VrsPanel } from './VrsPanel'
 
 type SortKey = 'name' | 'rating' | 'live'
 
@@ -78,6 +79,7 @@ export function TeamsPanel() {
         stages paired by live rating; Live shows each team's rating after its matches so far. Click Name, Rating or
         Live to sort. Enter teams into stages in the Design tab.
       </p>
+      <VrsPanel />
       <div className="row teams__actions">
         <button className="button" onClick={() => update((t) => addBlankTeam(t).tournament)}>
           + Add team
@@ -106,6 +108,7 @@ export function TeamsPanel() {
               <th>Logo URL</th>
               {header('rating')}
               {header('live')}
+              <th>Source</th>
               <th>Enters in</th>
               <th />
             </tr>
@@ -145,11 +148,23 @@ export function TeamsPanel() {
                     placeholder="1500"
                     value={team.rating ?? ''}
                     aria-label={`${team.name} rating`}
-                    onChange={(e) => patch(team.id, { rating: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    // A rating typed by hand no longer comes from a ranking.
+                    onChange={(e) =>
+                      patch(team.id, { rating: e.target.value === '' ? undefined : Number(e.target.value), ratingSource: undefined })
+                    }
                   />
                 </td>
                 <td className="teams__live muted" title={live.has(team.id) ? `Live rating in ${live.get(team.id)!.stage}` : undefined}>
                   {live.has(team.id) ? Math.round(live.get(team.id)!.rating) : '—'}
+                </td>
+                <td className="muted teams__source">
+                  {team.ratingSource ? (
+                    <span title={`Rating from ${team.ratingSource.catalog.toUpperCase()} standings of ${formatAsOf(team.ratingSource.asOf)}`}>
+                      {team.ratingSource.catalog.toUpperCase()} #{team.ratingSource.rank} · {formatAsOf(team.ratingSource.asOf)}
+                    </span>
+                  ) : (
+                    'Manual'
+                  )}
                 </td>
                 <td className="muted">{entries.has(team.id) ? stageName(entries.get(team.id)!) : 'Not entered'}</td>
                 <td>

@@ -12,6 +12,7 @@ const majorSwiss: SwissConfig = {
   firstRoundPairing: 'high-low',
   pairing: 'buchholz',
   avoidRematches: true,
+  majorPriorityTable: true,
   tiebreakers: ['buchholz', 'seed'],
 }
 

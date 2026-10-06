@@ -129,7 +129,8 @@ export function computeStageIn(
     : (resolved as TeamId[])
   try {
     const randomSeed = stageRandomSeed(tournament.randomSeed ?? 0, stage.id)
-    const ratings = Object.fromEntries(seeds.map((id) => [id, tournament.teams[id]?.rating]))
+    const fromSeeds = stage.config.format === 'swiss' && stage.config.ratingStart === 'seed'
+    const ratings = fromSeeds ? {} : Object.fromEntries(seeds.map((id) => [id, tournament.teams[id]?.rating]))
     const scoring = tournament.rules?.scoring ?? FREE_SCORING
     const { complete, ...out } = computeStage(stage.config, seeds, results, randomSeed, scoring, ratings)
     return { stageId: stage.id, status: complete ? 'complete' : 'in-progress', seeds, ...out }

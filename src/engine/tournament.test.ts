@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { cs2Major } from '../data/presets/cs2-major'
 import { nflPlayoffs } from '../data/presets/nfl-playoffs'
 import { groupsPlayoffs } from '../data/presets/groups-playoffs'
-import type { Tournament } from '../types'
+import type { SwissConfig, Tournament } from '../types'
 import { favouriteWins, playTournament, randomWinner } from './testing'
 import { simulate } from './simulator'
 import { computeTournament, validateTournament } from './tournament'
@@ -92,6 +92,30 @@ describe('live rating seed order', () => {
   it('uses entrant order by default', () => {
     const state = playTournament(cs2Major, randomWinner(3))
     expect(state.stages.playoffs.seeds).toEqual(state.stages['stage-3'].ranking.slice(0, 8))
+  })
+})
+
+describe('live rating start', () => {
+  const withStage1 = (config: Partial<SwissConfig>, ratings: boolean): Tournament => ({
+    ...cs2Major,
+    teams: Object.fromEntries(
+      // Ratings shuffled against seed order, so they'd pair differently from seeds.
+      Object.values(cs2Major.teams).map((t, i) => [t.id, ratings ? { ...t, rating: 1000 + 10 * ((i * 7) % 16) } : t]),
+    ),
+    stages: cs2Major.stages.map((s) => (s.id === 'stage-1' && s.config.format === 'swiss' ? { ...s, config: { ...s.config, pairing: 'rating', ...config } } : s)),
+  })
+  const round2 = (t: Tournament) => {
+    const results = {}
+    playTournament(t, favouriteWins(allTeams), results)
+    const first = computeTournament(t, {}).stages['stage-1'].matches.map((m) => m.id)
+    const r1 = Object.fromEntries(Object.entries((results as Record<string, Record<string, unknown>>)['stage-1']).filter(([id]) => first.includes(id)))
+    return computeTournament(t, { 'stage-1': r1 } as never).stages['stage-1'].swiss!.rounds[1].map((m) => m.id)
+  }
+
+  it('can ignore team ratings and start from seed order', () => {
+    const seeded = round2(withStage1({}, false))
+    expect(round2(withStage1({}, true))).not.toEqual(seeded)
+    expect(round2(withStage1({ ratingStart: 'seed' }, true))).toEqual(seeded)
   })
 })
 

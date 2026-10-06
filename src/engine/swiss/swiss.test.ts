@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Match, MatchResult, SwissConfig, TeamId } from '../../types'
 import { createRng } from '../random'
-import { computeSwiss, startingRatings, type SwissState } from './swiss'
+import { computeSwiss, pairByMajorTable, startingRatings, type SwissState } from './swiss'
 
 const cs2Swiss: SwissConfig = {
   format: 'swiss',
@@ -208,5 +208,46 @@ describe('live rating pairing', () => {
   it('plays out a 16-team stage without rematches', () => {
     const state = playOut(teams(16), eslSwiss, randomWinner(7))
     expectNoRematches(state)
+  })
+})
+
+describe('Major priority table', () => {
+  const six = ['s1', 's2', 's3', 's4', 's5', 's6']
+  const playedPairs = (...pairs: [string, string][]) => (a: string, b: string) =>
+    pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a))
+
+  it('takes the top-most row without a rematch', () => {
+    expect(pairByMajorTable(six, () => false)).toEqual([['s1', 's6'], ['s2', 's5'], ['s3', 's4']])
+    // 2v5 already played: row 2.
+    expect(pairByMajorTable(six, playedPairs(['s2', 's5']))).toEqual([['s1', 's6'], ['s2', 's4'], ['s3', 's5']])
+    // 1v6 and 2v4 played: row 3 (1v5 2v6 3v4), where highest-v-lowest search would keep 1v6 and play 2v3.
+    expect(pairByMajorTable(six, playedPairs(['s1', 's6'], ['s2', 's4']))).toEqual([['s1', 's5'], ['s2', 's6'], ['s3', 's4']])
+    expect(pairByMajorTable(six.slice(0, 4), () => false)).toBeNull()
+  })
+
+  it('pairs 6-team groups from round 4 by the table, over a full stage', () => {
+    const config: SwissConfig = { ...cs2Swiss, majorPriorityTable: true }
+    let checked = 0
+    for (let seed = 0; seed < 30; seed++) {
+      const final = playOut(teams(16), config, randomWinner(seed), seed)
+      expectNoRematches(final)
+      const results = Object.fromEntries(final.rounds.flat().filter((m) => m.result).map((m) => [m.id, m.result!]))
+      for (let r = 3; r < final.rounds.length; r++) {
+        // Standings before round r, from only the earlier rounds' results.
+        const earlier = new Set(final.rounds.slice(0, r).flat().map((m) => m.id))
+        const before = computeSwiss({ seeds: teams(16), config, results: Object.fromEntries(Object.entries(results).filter(([id]) => earlier.has(id))), randomSeed: seed })
+        const played = (a: TeamId, b: TeamId) => before.standings[a].opponents.includes(b)
+        const groups = new Map<string, Match[]>()
+        for (const m of final.rounds[r]) groups.set(m.label!, [...(groups.get(m.label!) ?? []), m])
+        for (const [label, matches] of groups) {
+          if (matches.length !== 3) continue
+          const inGroup = new Set(matches.flatMap((m) => m.slots.map((s) => s.teamId!)))
+          const ranked = before.ranking.filter((id) => inGroup.has(id))
+          expect(matches.map((m) => m.slots.map((s) => s.teamId)), `round ${r + 1} ${label}`).toEqual(pairByMajorTable(ranked, played))
+          checked++
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(30)
   })
 })

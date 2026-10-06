@@ -31,4 +31,17 @@ export interface GameRules {
   terms?: Partial<Terms>
   /** Names to choose from when recording a game, e.g. the CS2 map pool. */
   gamePool?: string[]
+  /**
+   * What a rating gap predicts. 'game' (default): the winner of one game.
+   * 'series': the winner of a best-of-3, as rankings like CS2's VRS do;
+   * the simulator then derives the per-game chance that gives those odds.
+   */
+  ratingBasis?: 'game' | 'series'
+  /**
+   * The least chance an underdog has, however big the rating gap: odds
+   * become floor + (1 - 2 * floor) * Elo odds. Applies to what ratings
+   * predict (see `ratingBasis`). Default 0. Valve's own VRS fit shows big
+   * underdogs still win about 10% of the time.
+   */
+  upsetFloor?: number
 }

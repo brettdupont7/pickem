@@ -985,10 +985,11 @@ input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Inset by half the cell padding on each side, so a 100% bar never runs into the next column's. */
 .odds__bar {
   position: absolute;
-  inset: 4px auto 4px 0;
-  width: calc(var(--p, 0) * 100%);
+  inset: 4px auto 4px 6px;
+  width: calc(var(--p, 0) * (100% - 12px));
   background: var(--accent);
   opacity: 0.18;
   pointer-events: none;

@@ -24,15 +24,38 @@ export interface SimulationOptions {
 
 export const isPlayable = (m: Match) => !m.result && m.slots.every((s) => s.teamId !== null)
 
+/** Chance of winning a best-of-3 when each game is won with chance `p`. */
+const bestOf3 = (p: number) => p * p * (3 - 2 * p)
+
+/** The per-game chance that wins a best-of-3 with chance `series` (inverse of `bestOf3`). */
+export function gameChanceForBestOf3(series: number): number {
+  let lo = 0
+  let hi = 1
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2
+    if (bestOf3(mid) < series) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
+}
+
 export function createSimulator(tournament: Tournament, options: SimulationOptions = {}) {
   const scoring = tournament.rules?.scoring ?? FREE_SCORING
   const { defaultRating = 1500, chaos = 0, detail = 'games' } = options
   const gameScore = options.gameScore === undefined ? scoreModelFor(scoring) : options.gameScore
   const rating = (id: TeamId) => options.ratings?.[id] ?? tournament.teams[id]?.rating ?? defaultRating
 
-  /** Chance that `a` beats `b` in a single game. */
-  const gameWinProbability = (a: TeamId, b: TeamId) =>
-    1 / (1 + 10 ** (((rating(b) - rating(a)) * (1 - chaos)) / 400))
+  const seriesBasis = tournament.rules?.ratingBasis === 'series'
+
+  /**
+   * Chance that `a` beats `b` in a single game. The Elo formula gives the
+   * chance of winning whatever ratings predict: one game, or with a
+   * 'series' basis a best-of-3, which is converted to a per-game chance.
+   */
+  const gameWinProbability = (a: TeamId, b: TeamId) => {
+    const predicted = 1 / (1 + 10 ** (((rating(b) - rating(a)) * (1 - chaos)) / 400))
+    return seriesBasis ? gameChanceForBestOf3(predicted) : predicted
+  }
 
   /**
    * Simulates a match, continuing from any games or series score already

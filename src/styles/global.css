@@ -987,6 +987,103 @@ input[type='number'] {
   margin: 8px 0;
 }
 
+.teams__source {
+  white-space: nowrap;
+}
+
+/* Rankings (VRS) in the Teams tab */
+
+.vrs {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.vrs__bar {
+  align-items: center;
+}
+
+.vrs .hint,
+.vrs .error {
+  margin: 8px 0 0;
+}
+
+.vrs__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vrs__panel input[type='search'] {
+  width: 260px;
+  max-width: 100%;
+}
+
+.vrs__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 2px 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.vrs__entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.vrs__entry:hover {
+  background: var(--surface-2);
+}
+
+.vrs__entry.is-present {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.vrs__rank {
+  width: 3em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.vrs__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vrs__points {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.vrs__links select {
+  max-width: 260px;
+}
+
+.link-button {
+  all: unset;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-button:focus-visible {
+  outline: 2px solid currentColor;
+}
+
 .paste {
   display: flex;
   flex-direction: column;

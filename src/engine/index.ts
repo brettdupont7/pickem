@@ -10,3 +10,4 @@ export type { ComputedStage, StageStatus, TournamentIssue, TournamentState } fro
 export * from './design'
 export * from './io'
 export * from './layers'
+export * from './catalog'

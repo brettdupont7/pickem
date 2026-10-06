@@ -4,10 +4,11 @@ import type { BestOf, Match, Tournament } from '../../types'
 import { createRng } from '../random'
 import { resolveReport, setGame } from '../results'
 import { computeTournament } from '../tournament'
-import { clearSimulated, createSimulator, runMonteCarlo, simulate } from './simulator'
+import { clearSimulated, createSimulator, gameChanceForBestOf3, runMonteCarlo, simulate } from './simulator'
 
-const duel = (ratings: [number, number]): Tournament => ({
+const duel = (ratings: [number, number], ratingBasis: 'game' | 'series' = 'game'): Tournament => ({
   ...cs2Major,
+  rules: { ...cs2Major.rules!, ratingBasis },
   teams: { a: { id: 'a', name: 'A', rating: ratings[0] }, b: { id: 'b', name: 'B', rating: ratings[1] } },
 })
 
@@ -75,6 +76,30 @@ describe('simulateMatch', () => {
     expect(winRate(0)).toBeGreaterThan(0.9)
     expect(winRate(1)).toBeGreaterThan(0.45)
     expect(winRate(1)).toBeLessThan(0.55)
+  })
+
+  it('with a series basis, matches Elo odds over a best-of-3', () => {
+    // 300 points: Elo gives 84.9% to win whatever ratings predict.
+    const elo = 1 / (1 + 10 ** (-300 / 400))
+    const winRate = (basis: 'game' | 'series', bestOf: BestOf) => {
+      const { simulateMatch } = createSimulator(duel([1800, 1500], basis), { detail: 'winner' })
+      const rng = createRng(5)
+      let wins = 0
+      for (let i = 0; i < 20000; i++) if (simulateMatch(match(bestOf), undefined, rng).winnerId === 'a') wins++
+      return wins / 20000
+    }
+    expect(winRate('series', 3)).toBeCloseTo(elo, 1)
+    expect(winRate('game', 1)).toBeCloseTo(elo, 1)
+    // A per-game basis compounds over a best-of-3; a series basis gives Bo1s a smaller edge.
+    expect(winRate('game', 3)).toBeGreaterThan(0.9)
+    expect(winRate('series', 1)).toBeLessThan(elo - 0.05)
+  })
+
+  it('inverts best-of-3 odds', () => {
+    for (const p of [0.1, 0.5, 0.66, 0.9]) {
+      const series = p * p * (3 - 2 * p)
+      expect(gameChanceForBestOf3(series)).toBeCloseTo(p, 6)
+    }
   })
 })
 

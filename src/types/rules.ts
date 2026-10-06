@@ -31,4 +31,10 @@ export interface GameRules {
   terms?: Partial<Terms>
   /** Names to choose from when recording a game, e.g. the CS2 map pool. */
   gamePool?: string[]
+  /**
+   * What a rating gap predicts. 'game' (default): the winner of one game.
+   * 'series': the winner of a best-of-3, as rankings like CS2's VRS do;
+   * the simulator then derives the per-game chance that gives those odds.
+   */
+  ratingBasis?: 'game' | 'series'
 }

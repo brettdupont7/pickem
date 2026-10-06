@@ -63,7 +63,14 @@ Teams in the presets are placeholders. To rename them all at once, paste a list 
   - **Elimination stages** show the bracket by round, with lines from each match to the one its winner plays next. The lines turn green once the winner is decided. Double elimination shows the upper and lower brackets separately, with the grand final to the right of both. Reseeded rounds have no lines, since opponents aren't fixed in advance. Once a match is decided, a mark next to each team's score shows where it goes: a green **→** if it plays on (to its next match, or to a later stage once its place is certain), a red **↓** if it drops to the lower bracket or the 3rd place match, and nothing if it's out. Hover a mark for details. Once a stage is done, **Final placings** lists every team's place and which later stage it goes to.
   - **Waiting stages** list their entrants, e.g. "3rd in Stage 1".
 - **Odds:** runs 2,000 simulations of the rest of the event. For each team it shows the chance of advancing from each stage, and of winning the last one. It uses whichever view is selected: under **Picks**, your picks and actual results are kept fixed; under **Actual results**, only actual results are, so the odds show the real-world outlook.
-- **Teams:** add, remove and edit teams: name, short name, logo URL and rating. The short name or logo is shown in the Swiss grid (initials are used when blank). Ratings drive the simulator; blank means 1500. They're also the starting ratings for Swiss stages paired by live rating, and the **Live** column shows each team's current live rating. Click the **Name**, **Rating** or **Live** header to sort (click again to reverse, a third time to restore the original order). **Paste team names…** takes one name per line and either renames the existing teams in order or adds them as new teams.
+- **Teams:** at the top, **VRS rankings** brings in Valve's Regional Standings for CS2:
+  - **Download / Refresh** fetches the latest global standings from [Valve's repository](https://github.com/ValveSoftware/counter-strike_regional_standings) and keeps them in the browser, apart from your tournaments.
+  - **Add from VRS…** lists the top 150 (search covers every team and player); tick teams to add them with their VRS points as their rating.
+  - **Link teams to VRS…** matches the tournament's teams to VRS by name (ignoring case, punctuation, words like "Team" and short names like NAVI), lets you correct any match, then sets their ratings to VRS points.
+  - **Update ratings to …** appears when a newer snapshot is downloaded; ratings never change on their own, so an event in progress keeps the ratings it started with.
+  - The **Source** column shows where each rating came from, e.g. "VRS #3 · Oct 5, 2026". Typing a rating by hand makes it manual again.
+
+  Below that, add, remove and edit teams: name, short name, logo URL and rating. The short name or logo is shown in the Swiss grid (initials are used when blank). Ratings drive the simulator; blank means 1500. They're also the starting ratings for Swiss stages paired by live rating, and the **Live** column shows each team's current live rating. Click the **Name**, **Rating** or **Live** header to sort (click again to reverse, a third time to restore the original order). **Paste team names…** takes one name per line and either renames the existing teams in order or adds them as new teams.
 - **Design:** the tournament library and the designer (see below).
 
 ### Simulate
@@ -90,6 +97,7 @@ The **Design** tab edits the open tournament. Changes apply straight away, and t
   - **Scoring:** "Higher score wins" (with an optional typical score for the simulator) or "First to N" with optional overtime.
   - **Words:** what the UI calls a game and a point.
   - **Game names:** an optional list, such as a map pool.
+  - **Ratings predict:** whether a rating gap predicts one game (default) or a best-of-3. VRS points predict a best-of-3, so the CS2 rule set uses that; the simulator then works out the per-game chance that gives those odds, so a Bo3 matches VRS and a Bo1 is closer to a coin flip.
   - **Load a rule set** fills these in for CS2, Valorant, American football or a generic sport.
 - **Stages:** grouped by phase. Click a stage to expand it. Each badge shows how many problems the stage has.
   - **Duplicating:** **⧉** on a stage copies it into the same phase, and **Duplicate phase** copies every stage in a phase into a new phase right after it. Copies keep the format and settings, and get entrants that work straight away: places from another stage move to the next free places (a copy of a playoff taking 1st–8th takes 9th–16th), and invited teams, or places with none left, become new placeholder teams to rename.

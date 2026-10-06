@@ -32,8 +32,17 @@ export interface ComputedStage {
   swiss?: SwissState
   /** Elimination stages only: places each team that's done can still finish in (1-based, inclusive). */
   places?: Record<TeamId, [number, number]>
+  /**
+   * Waiting stages only: teams already certain to enter through places in
+   * earlier stages, before those stages finish. Their seeds aren't known yet.
+   */
+  qualified?: { teamId: TeamId; stageId: StageId }[]
   error?: string
 }
+
+/** Places each finished team in a stage can still end up in, for any format. */
+export const placesOf = (computed: ComputedStage | undefined): Record<TeamId, [number, number]> =>
+  computed?.places ?? computed?.swiss?.places ?? {}
 
 export interface TournamentState {
   stages: Record<StageId, ComputedStage>
@@ -122,7 +131,14 @@ export function computeStageIn(
     return from.ranking[source.place - 1] ?? null
   }
   const resolved = stage.entrants.map(resolveEntrant)
-  if (resolved.some((id) => id === null)) return { ...base, status: 'waiting', seeds: null }
+  if (resolved.some((id) => id === null)) {
+    // Worked out on first read only: the simulator passes through waiting stages thousands of times.
+    let qualified: ComputedStage['qualified']
+    return Object.defineProperty({ ...base, status: 'waiting', seeds: null } as ComputedStage, 'qualified', {
+      enumerable: true,
+      get: () => (qualified ??= clinched(stage, earlier)),
+    })
+  }
 
   const seeds = stage.config.format !== 'swiss' && stage.config.seedOrder === 'live-rating'
     ? byLiveRating(tournament, stage.entrants, resolved as TeamId[], earlier)
@@ -159,6 +175,30 @@ function byLiveRating(
     .map((id, i) => ({ id, i, rating: ratingOf(id, i) }))
     .sort((a, b) => b.rating - a.rating || a.i - b.i)
     .map((s) => s.id)
+}
+
+/**
+ * Teams certain to enter `stage` from earlier stages that haven't finished:
+ * every place they can still end up in is one this stage takes.
+ */
+function clinched(stage: Stage, earlier: Record<StageId, ComputedStage>): ComputedStage['qualified'] {
+  const taken = new Map<StageId, Set<number>>()
+  for (const e of stage.entrants) if (e.kind === 'placement') taken.set(e.stageId, (taken.get(e.stageId) ?? new Set()).add(e.place))
+  const qualified: NonNullable<ComputedStage['qualified']> = []
+  for (const [stageId, places] of taken) {
+    const from = earlier[stageId]
+    if (from?.status !== 'in-progress') continue
+    const ranges = placesOf(from)
+    const sure = Object.entries(ranges).filter(([, [lo, hi]]) => {
+      for (let p = lo; p <= hi; p++) if (!places.has(p)) return false
+      return true
+    })
+    // Best possible place first, then the stage's current ranking.
+    const rank = new Map(from.ranking.map((id, i) => [id, i]))
+    sure.sort(([a, [la]], [b, [lb]]) => la - lb || rank.get(a)! - rank.get(b)!)
+    qualified.push(...sure.map(([teamId]) => ({ teamId, stageId })))
+  }
+  return qualified
 }
 
 /** Computes every stage from the tournament definition and results. */

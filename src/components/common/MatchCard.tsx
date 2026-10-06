@@ -58,20 +58,23 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
   }
 
   const teamButton = (slot: 0 | 1) => {
-    const { teamId, isBye } = match.slots[slot]
-    const team = teamId ? teams[teamId] : undefined
+    const { teamId, isBye, expected } = match.slots[slot]
+    // A team already through whose exact slot waits on the rest of the round.
+    const team = teamId ? teams[teamId] : expected ? teams[expected] : undefined
     const won = view.status !== 'bye' && view.winnerSlot === slot
     const lost = view.status !== 'bye' && view.winnerSlot !== null && !won
     const score = scoreFor(slot)
-    const name = team?.name ?? teamId ?? (isBye ? 'Bye' : 'TBD')
+    const name = team?.name ?? teamId ?? expected ?? (isBye ? 'Bye' : 'TBD')
     return (
       <button
         key={slot}
-        className={`match__team${won ? ' is-winner' : ''}${lost ? ' is-loser' : ''}`}
+        className={`match__team${won ? ' is-winner' : ''}${lost ? ' is-loser' : ''}${!teamId && expected ? ' is-expected' : ''}`}
         disabled={!editable}
         onClick={() => teamId && pickWinner(stageId, match, teamId)}
         title={
-          editable
+          !teamId && expected
+            ? `${name} is through; the matchup is set once the round before finishes`
+            : editable
             ? won
               ? `${name} — click to clear`
               : resultView === 'actual'
@@ -102,6 +105,11 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
 
   const meta = (
     <>
+      {match.slots.some((s) => !s.teamId && s.expected) && (
+        <span className="badge badge--tbd" title="Matchup set once the round before finishes">
+          TBD
+        </span>
+      )}
       {view.status === 'live' && <span className="badge badge--live">Live</span>}
       {view.source && view.source !== 'bye' && (
         <span className={`source source--${view.source}`} title={`Result: ${view.source}`} />

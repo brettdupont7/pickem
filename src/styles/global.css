@@ -266,6 +266,14 @@ input[type='number'] {
   background: var(--surface-3);
 }
 
+/* A Swiss record whose pairings wait on the round before. */
+.badge--tbd {
+  margin-left: 6px;
+  vertical-align: middle;
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
 /* Match card */
 
 .stage {
@@ -364,6 +372,11 @@ input[type='number'] {
 .match__team.is-winner {
   border-left-color: var(--win);
   font-weight: 600;
+}
+
+.match__team.is-expected {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .match__team.is-loser {
@@ -658,6 +671,41 @@ input[type='number'] {
   cursor: default;
 }
 
+/* Teams headed to a record before its pairings are made. */
+.waiting__qualified h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.waiting__teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.waiting__teams li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.match--arriving {
+  border-style: dashed;
+}
+
+.match--arriving .match__team {
+  display: flex;
+  cursor: default;
+}
+
+.match--arriving .match__vs {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .team-badge {
   flex: none;
   width: 38px;
@@ -937,10 +985,11 @@ input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Inset by half the cell padding on each side, so a 100% bar never runs into the next column's. */
 .odds__bar {
   position: absolute;
-  inset: 4px auto 4px 0;
-  width: calc(var(--p, 0) * 100%);
+  inset: 4px auto 4px 6px;
+  width: calc(var(--p, 0) * (100% - 12px));
   background: var(--accent);
   opacity: 0.18;
   pointer-events: none;
@@ -959,22 +1008,26 @@ input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
-.teams__sort {
+.teams__sort,
+.sort-button {
   all: unset;
   cursor: pointer;
   font-weight: inherit;
 }
 
-.teams__sort:hover {
+.teams__sort:hover,
+.sort-button:hover {
   text-decoration: underline;
 }
 
-.teams__sort:focus-visible {
+.teams__sort:focus-visible,
+.sort-button:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
 
-.teams__sort-arrow {
+.teams__sort-arrow,
+.sort-button__arrow {
   display: inline-block;
   width: 1em;
   margin-left: 2px;
@@ -1412,4 +1465,10 @@ input[type='number'] {
   .toolbar__spacer {
     display: none;
   }
+}
+
+/* "advance" / "win" under each stage name in the odds table. */
+.odds__what {
+  display: block;
+  font-weight: normal;
 }

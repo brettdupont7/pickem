@@ -251,3 +251,26 @@ describe('Major priority table', () => {
     expect(checked).toBeGreaterThan(30)
   })
 })
+
+describe('upcoming records', () => {
+  it('places teams decided in the round being played, before the round finishes', () => {
+    const first = computeSwiss({ seeds: teams(16), config: cs2Swiss, results: {} })
+    const [m1, m2] = first.rounds[0]
+    const results = { [m1.id]: { winnerId: m1.slots[0].teamId!, source: 'pick' as const } }
+    const state = computeSwiss({ seeds: teams(16), config: cs2Swiss, results })
+    // Round 2 isn't paired yet, but the decided teams' next records are known.
+    expect(state.rounds).toHaveLength(1)
+    expect(state.upcoming).toEqual({
+      [m1.slots[0].teamId!]: { wins: 1, losses: 0 },
+      [m1.slots[1].teamId!]: { wins: 0, losses: 1 },
+    })
+    expect(state.upcoming[m2.slots[0].teamId!]).toBeUndefined()
+    // Standings still show records before the round.
+    expect(state.standings[m1.slots[0].teamId!]).toMatchObject({ wins: 0, losses: 0 })
+  })
+
+  it('is empty once a round is complete', () => {
+    const state = playOut(teams(16), cs2Swiss, higherSeedWins)
+    expect(state.upcoming).toEqual({})
+  })
+})

@@ -1,4 +1,4 @@
-import type { SingleElimConfig } from '../../types'
+import type { Match, SingleElimConfig, TeamId } from '../../types'
 import {
   bestOfFromFinal,
   bracketSize,
@@ -82,14 +82,38 @@ export function buildSingleElim(teamCount: number, config: SingleElimConfig, ran
   return nodes
 }
 
-/** Pairs each reseeded round, best remaining seed v worst, once the round before it is decided. */
-function reseed(nodes: BracketNode[], input: SingleElimInput) {
+/**
+ * Pairs each reseeded round, best remaining seed v worst, once the round
+ * before it is decided. For the first round still waiting, returns where
+ * the teams already through would play if every open match went to the
+ * better seed, by match ID and slot.
+ */
+function reseed(nodes: BracketNode[], input: SingleElimInput): Map<string, [TeamId | undefined, TeamId | undefined]> {
   const seedOf = new Map(input.seeds.map((id, i) => [id, i]))
   const roundNodes = (round: number) => nodes.filter((n) => n.side === 'main' && n.round === round)
   for (let round = 1; roundNodes(round).length > 0; round++) {
     const resolved = resolveBracket(nodes, input.seeds, input.results, input.scoring)
-    const survivors = roundNodes(round - 1).map((n) => resolved.winnerOf(n.id))
-    if (!survivors.every((o) => o.kind === 'team')) return
+    const previous = roundNodes(round - 1)
+    const survivors = previous.map((n) => resolved.winnerOf(n.id))
+    if (!survivors.every((o) => o.kind === 'team')) {
+      // Assume the better seed wins each open match, to place those already through.
+      const known = new Set(survivors.flatMap((o) => (o.kind === 'team' ? [o.teamId] : [])))
+      const assumed = previous.map((n, i) => {
+        const o = survivors[i]
+        if (o.kind === 'team') return o.teamId
+        const match = resolved.matches.find((m) => m.id === n.id)
+        const teams = match?.slots.map((s) => s.teamId).filter((id): id is TeamId => !!id) ?? []
+        return teams.length === 2 ? teams.sort((a, b) => seedOf.get(a)! - seedOf.get(b)!)[0] : null
+      })
+      const expected = new Map<string, [TeamId | undefined, TeamId | undefined]>()
+      if (assumed.some((id) => id === null) || known.size === 0) return expected
+      const order = (assumed as TeamId[]).sort((a, b) => seedOf.get(a)! - seedOf.get(b)!)
+      roundNodes(round).forEach((node, i) => {
+        const pair = [order[i], order[order.length - 1 - i]].map((id) => (known.has(id) ? id : undefined))
+        expected.set(node.id, pair as [TeamId | undefined, TeamId | undefined])
+      })
+      return expected
+    }
     const order = survivors.map((o) => seedOf.get((o as { teamId: string }).teamId)!).sort((a, b) => a - b)
     roundNodes(round).forEach((node, i) => {
       node.sources = [
@@ -98,16 +122,22 @@ function reseed(nodes: BracketNode[], input: SingleElimInput) {
       ]
     })
   }
+  return new Map()
 }
 
 export function computeSingleElim(input: SingleElimInput): EliminationState {
   const { seeds, config, results, randomSeed = 0, scoring } = input
   validateSeeds(seeds, 2, 'Single elimination')
   const nodes = buildSingleElim(seeds.length, config, randomSeed)
-  if (config.reseed) reseed(nodes, input)
+  const expected = config.reseed ? reseed(nodes, input) : new Map()
   const resolved = resolveBracket(nodes, seeds, results, scoring)
+  const withExpected = (m: Match): Match => {
+    const pair = expected.get(m.id)
+    if (!pair) return m
+    return { ...m, slots: m.slots.map((s, i) => (s.teamId === null && pair[i] ? { ...s, expected: pair[i] } : s)) as Match['slots'] }
+  }
   return {
-    matches: resolved.matches,
+    matches: resolved.matches.map(withExpected),
     ranking: rankBracket(nodes, resolved, seeds),
     places: finishedPlaces(nodes, resolved, seeds),
     complete: isComplete(resolved.matches),

@@ -211,3 +211,61 @@ describe('Groups + Playoffs preset', () => {
     expect(state.stages.playoffs.status).toBe('complete')
   })
 })
+
+describe('teams already through', () => {
+  /** Plays only stage-1's first `rounds` rounds of a CS2 Major, favourites winning. */
+  const partStage1 = (rounds: number) => {
+    const results: Record<string, Record<string, { source: 'pick'; winnerId: string }>> = { 'stage-1': {} }
+    for (let r = 0; r < rounds; r++) {
+      const round = computeTournament(cs2Major, results).stages['stage-1'].swiss!.rounds[r]
+      for (const m of round) if (!m.result) results['stage-1'][m.id] = { source: 'pick', winnerId: favouriteWins(allTeams)(m) }
+    }
+    return computeTournament(cs2Major, results)
+  }
+
+  it('gives finished Swiss teams the run of places they can still take', () => {
+    const state = partStage1(3)
+    const swiss = state.stages['stage-1'].swiss!
+    const advanced = Object.keys(swiss.places).filter((id) => swiss.standings[id].wins === 3)
+    const out = Object.keys(swiss.places).filter((id) => swiss.standings[id].losses === 3)
+    expect(advanced).toHaveLength(2)
+    expect(out).toHaveLength(2)
+    for (const id of advanced) expect(swiss.places[id]).toEqual([1, 8])
+    for (const id of out) expect(swiss.places[id]).toEqual([9, 16])
+  })
+
+  it('counts teams that finish in the round still being played', () => {
+    const before = partStage1(3)
+    const round4 = before.stages['stage-1'].swiss!.rounds[3]
+    // A 2-1 team wins its round-4 match while the rest are unplayed.
+    const match = round4.find((m) => m.label === '2-1')!
+    const winner = match.slots[0].teamId!
+    const results = { 'stage-1': { ...Object.fromEntries(before.stages['stage-1'].matches.filter((m) => m.result && m.round < 3).map((m) => [m.id, m.result!])), [match.id]: { source: 'pick' as const, winnerId: winner } } }
+    const state = computeTournament(cs2Major, results)
+    expect(state.stages['stage-1'].swiss!.places[winner]).toEqual([1, 8])
+    expect(state.stages['stage-2'].qualified!.map((q) => q.teamId)).toContain(winner)
+  })
+
+  it('lists them on a waiting stage that takes those places', () => {
+    const state = partStage1(3)
+    const advanced = Object.entries(state.stages['stage-1'].swiss!.standings).filter(([, s]) => s.wins === 3).map(([id]) => id)
+    expect(state.stages['stage-2'].status).toBe('waiting')
+    expect(state.stages['stage-2'].qualified!.map((q) => q.teamId).sort()).toEqual(advanced.sort())
+    // Eliminated teams aren't through to anything.
+    expect(state.stages['stage-2'].qualified!.every((q) => q.stageId === 'stage-1')).toBe(true)
+  })
+
+  it('shows teams already through in a reseeded round, where the better seeds would put them', () => {
+    const wildcard = computeTournament(nflPlayoffs, {}).stages.afc.matches.filter((m) => m.round === 0 && !m.result)
+    // The 7 seed upsets the 2 seed; the other wildcard games aren't played yet.
+    const upset = wildcard.find((m) => m.slots.some((s) => s.teamId === 'afc-7'))!
+    const state = computeTournament(nflPlayoffs, { afc: { [upset.id]: { source: 'pick', winnerId: 'afc-7' } } })
+    const divisional = state.stages.afc.matches.filter((m) => m.round === 1)
+    const expected = divisional.flatMap((m) => m.slots.map((s) => s.expected).filter(Boolean))
+    // The 1 seed (bye) and the 7 seed are through; assuming 3 and 4 win, the 1 seed plays the 7 seed.
+    expect(expected.sort()).toEqual(['afc-1', 'afc-7'])
+    const top = divisional.find((m) => m.slots.some((s) => s.expected === 'afc-1'))!
+    expect(top.slots.map((s) => s.expected)).toEqual(['afc-1', 'afc-7'])
+    expect(divisional.every((m) => m.slots.every((s) => s.teamId === null))).toBe(true)
+  })
+})

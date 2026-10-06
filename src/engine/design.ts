@@ -117,6 +117,66 @@ export function addStage(tournament: Tournament): { tournament: Tournament; stag
   return { tournament: { ...tournament, stages: [...tournament.stages, stage] }, stageId: id }
 }
 
+/**
+ * Copies `sources` into `phase`, inserted after display index `after`, with
+ * fresh IDs and names. Entrants are filled so the copies are valid straight
+ * away: a placement moves to the next unused place of the same stage (a copy
+ * of a playoff taking 1st-8th takes 9th-16th), and invited teams, or
+ * placements with no place left, become new placeholder teams.
+ */
+function copyStages(tournament: Tournament, sources: Stage[], phase: number, after: number): { tournament: Tournament; ids: StageId[] } {
+  let next = tournament
+  const used = new Map<StageId, Set<number>>()
+  for (const stage of tournament.stages)
+    for (const e of stage.entrants) if (e.kind === 'placement') used.set(e.stageId, (used.get(e.stageId) ?? new Set()).add(e.place))
+  const nextPlace = (stageId: StageId): number | null => {
+    const size = tournament.stages.find((s) => s.id === stageId)?.entrants.length ?? 0
+    const taken = used.get(stageId) ?? new Set()
+    for (let place = 1; place <= size; place++) if (!taken.has(place)) return (used.set(stageId, taken.add(place)), place)
+    return null
+  }
+
+  const ids: StageId[] = []
+  const copies = sources.map((source): Stage => {
+    const entrants = source.entrants.map((e): EntrantSource => {
+      const place = e.kind === 'placement' ? nextPlace(e.stageId) : null
+      if (e.kind === 'placement' && place !== null) return { kind: 'placement', stageId: e.stageId, place }
+      const added = addBlankTeam(next)
+      next = added.tournament
+      return { kind: 'team', teamId: added.id }
+    })
+    const id = uniqueId(source.id, [...tournament.stages.map((s) => s.id), ...ids])
+    ids.push(id)
+    const name = uniqueName(source.name, [...tournament.stages.map((s) => s.name), ...sources.map((s) => s.name)])
+    return { id, name, phase, config: structuredClone(source.config), entrants }
+  })
+  const stages = [...next.stages]
+  stages.splice(after + 1, 0, ...copies)
+  return { tournament: { ...next, stages }, ids }
+}
+
+/** Copies a stage into the same phase, right after it. See `copyStages` for how entrants are filled. */
+export function duplicateStage(tournament: Tournament, stageId: StageId): { tournament: Tournament; stageId: StageId } {
+  const index = tournament.stages.findIndex((s) => s.id === stageId)
+  if (index < 0) return { tournament, stageId }
+  const source = tournament.stages[index]
+  const { tournament: next, ids } = copyStages(tournament, [source], source.phase, index)
+  return { tournament: next, stageId: ids[0] }
+}
+
+/**
+ * Copies every stage in a phase into a new phase right after it; later
+ * phases move back one. See `copyStages` for how entrants are filled.
+ */
+export function duplicatePhase(tournament: Tournament, phase: number): { tournament: Tournament; stageIds: StageId[] } {
+  const sources = tournament.stages.filter((s) => s.phase === phase)
+  if (sources.length === 0) return { tournament, stageIds: [] }
+  const shifted = { ...tournament, stages: tournament.stages.map((s) => (s.phase > phase ? { ...s, phase: s.phase + 1 } : s)) }
+  const last = shifted.stages.reduce((found, s, i) => (s.phase === phase ? i : found), -1)
+  const { tournament: next, ids } = copyStages(shifted, sources, phase + 1, last)
+  return { tournament: next, stageIds: ids }
+}
+
 /** Removes a stage, and every entrant that drew from it. */
 export function removeStage(tournament: Tournament, stageId: StageId): Tournament {
   const stages = tournament.stages

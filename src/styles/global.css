@@ -1077,6 +1077,18 @@ input[type='number'] {
   margin-bottom: 16px;
 }
 
+.phase__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.phase__header .button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
 .phase__title {
   font-size: 12px;
   text-transform: uppercase;

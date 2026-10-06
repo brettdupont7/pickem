@@ -128,8 +128,19 @@ export function LibraryPanel() {
                       Open
                     </button>
                   )}
-                  <button className="button button--ghost" onClick={() => (closeEditor(), duplicateTournament(row.tournament.id))}>
+                  <button
+                    className="button button--ghost"
+                    onClick={() => (closeEditor(), duplicateTournament(row.tournament.id))}
+                    title="Copy the tournament with its picks and results"
+                  >
                     Duplicate
+                  </button>
+                  <button
+                    className="button button--ghost"
+                    onClick={() => (closeEditor(), duplicateTournament(row.tournament.id, true))}
+                    title="Copy the format and teams, without picks or results"
+                  >
+                    Duplicate design
                   </button>
                   <button className="button button--ghost" onClick={() => exportRow(row)}>
                     Export

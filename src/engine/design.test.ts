@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cs2Major, nflPlayoffs } from '../data/presets'
+import { groupsPlayoffs } from '../data/presets/groups-playoffs'
 import type { Stage } from '../types'
 import {
   addStage,
@@ -7,6 +8,8 @@ import {
   blankTournament,
   defaultConfig,
   describeEntrants,
+  duplicatePhase,
+  duplicateStage,
   eliminationRounds,
   formatRanges,
   instantiate,
@@ -143,5 +146,48 @@ describe('instantiate', () => {
 
   it('makes a valid blank tournament', () => {
     expect(validateTournament(blankTournament())).toEqual([])
+  })
+})
+
+describe('duplicating stages', () => {
+  const stage = (t: { stages: Stage[] }, id: string) => t.stages.find((s) => s.id === id)!
+
+  it('copies a stage into the same phase, taking the next free places', () => {
+    const { tournament, stageId } = duplicateStage(cs2Major, 'playoffs')
+    const copy = stage(tournament, stageId)
+    const original = stage(cs2Major, 'playoffs')
+    expect(copy).toMatchObject({ id: 'playoffs-2', name: `${original.name} (2)`, phase: original.phase, config: original.config })
+    expect(copy.entrants.map((e) => (e.kind === 'placement' ? `${e.stageId}#${e.place}` : e.kind))).toEqual(
+      Array.from({ length: 8 }, (_, i) => `stage-3#${9 + i}`),
+    )
+    // Shown right after the original.
+    expect(tournament.stages.map((s) => s.id).indexOf(stageId)).toBe(tournament.stages.map((s) => s.id).indexOf('playoffs') + 1)
+    expect(validateTournament(tournament)).toEqual([])
+  })
+
+  it('gives invited teams and used-up places new placeholder teams', () => {
+    const teamsBefore = Object.keys(cs2Major.teams).length
+    const once = duplicateStage(cs2Major, 'stage-1')
+    const copy = stage(once.tournament, once.stageId)
+    expect(copy.entrants.every((e) => e.kind === 'team' && !(e.teamId in cs2Major.teams))).toBe(true)
+    expect(Object.keys(once.tournament.teams)).toHaveLength(teamsBefore + copy.entrants.length)
+    expect(validateTournament(once.tournament)).toEqual([])
+
+    // Stage 3 has 16 places: two copies of the 8-team playoffs use them up.
+    const twice = duplicateStage(duplicateStage(cs2Major, 'playoffs').tournament, 'playoffs')
+    const third = stage(twice.tournament, twice.stageId)
+    expect(third.entrants.every((e) => e.kind === 'team')).toBe(true)
+    expect(validateTournament(twice.tournament)).toEqual([])
+  })
+
+  it('copies a phase into a new phase after it, moving later phases back', () => {
+    const { tournament, stageIds } = duplicatePhase(groupsPlayoffs, 0)
+    const groups = groupsPlayoffs.stages.filter((s) => s.phase === 0)
+    expect(stageIds).toHaveLength(groups.length)
+    for (const id of stageIds) expect(stage(tournament, id).phase).toBe(1)
+    expect(stage(tournament, 'playoffs').phase).toBe(2)
+    expect(validateTournament(tournament)).toEqual([])
+    // Picks and results are separate from the design, and the original is untouched.
+    expect(groupsPlayoffs.stages.every((s) => !stageIds.includes(s.id))).toBe(true)
   })
 })

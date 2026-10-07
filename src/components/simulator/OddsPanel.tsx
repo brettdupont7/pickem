@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { createMonteCarlo, playOrder, simulationRatings, type MonteCarloResult } from '../../engine'
+import { createMonteCarlo, playOrder, simulationRatings, type MatchOdds, type MonteCarloResult } from '../../engine'
 import { useTournamentStore, useViewResults } from '../../store/tournament'
 import type { StageId, Tournament } from '../../types'
 
@@ -73,12 +73,16 @@ export function OddsPanel() {
   const stages = playOrder(tournament.stages)
   const advancing = useMemo(() => advancingPlaces(tournament), [tournament])
 
+  /** Chance of advancing from a stage (or winning it, for the last) from the chance of each place. */
+  const advanceChance = (stageId: StageId, placeOdds: number[]) => {
+    const places = advancing.get(stageId)
+    if (!places) return placeOdds[0] ?? 0
+    return [...places].reduce((sum, place) => sum + (placeOdds[place - 1] ?? 0), 0)
+  }
+
   const stageChance = (teamId: string, stageId: StageId) => {
     const stageOdds = odds?.teams[teamId]?.stages[stageId]
-    if (!stageOdds) return 0
-    const places = advancing.get(stageId)
-    if (!places) return stageOdds.places[0] ?? 0
-    return [...places].reduce((sum, place) => sum + (stageOdds.places[place - 1] ?? 0), 0)
+    return stageOdds ? advanceChance(stageId, stageOdds.places) : 0
   }
 
   const name = (id: string) => tournament.teams[id].name
@@ -164,6 +168,97 @@ export function OddsPanel() {
           </table>
         </div>
       )}
+      {odds && odds.matches.length > 0 && <MatchesThatMatter odds={odds} advanceChance={advanceChance} advancing={advancing} />}
     </div>
+  )
+}
+
+interface SwingRow {
+  match: MatchOdds
+  /** Per team: chance to win the match, and to advance from the stage if it wins or loses. */
+  teams: { id: string; wins: number; ifWin: number; ifLose: number }[]
+  swing: number
+}
+
+/** Open matches, ordered by how much their result moves the two teams' chances in the stage. */
+function MatchesThatMatter({
+  odds,
+  advanceChance,
+  advancing,
+}: {
+  odds: MonteCarloResult
+  advanceChance: (stageId: StageId, placeOdds: number[]) => number
+  advancing: Map<StageId, Set<number>>
+}) {
+  const tournament = useTournamentStore((s) => s.tournament)
+  const stageName = (id: StageId) => tournament.stages.find((s) => s.id === id)?.name ?? id
+
+  const rows: SwingRow[] = odds.matches
+    .map((match) => {
+      const [a, b] = match.teams
+      const teams = match.teams.map((id) => {
+        const other = id === a ? b : a
+        return {
+          id,
+          wins: id === a ? match.firstWins : 1 - match.firstWins,
+          ifWin: advanceChance(match.stageId, match.ifWins[id][id]),
+          ifLose: advanceChance(match.stageId, match.ifWins[other][id]),
+        }
+      })
+      return { match, teams, swing: Math.max(...teams.map((t) => t.ifWin - t.ifLose)) }
+    })
+    .sort((x, y) => y.swing - x.swing)
+
+  const points = (p: number) => `${p > 0 ? '+' : ''}${Math.round(p * 100)}`
+
+  return (
+    <section className="swings">
+      <h3>Matches that matter</h3>
+      <p className="hint">
+        Matches that can be played now, biggest swing first: each team's chance to advance from the stage (or win it, for the
+        last stage) if it wins the match or loses it, and the difference in percentage points.
+      </p>
+      <div className="table-wrap">
+        <table className="odds__table swings__table">
+          <thead>
+            <tr>
+              <th>Match</th>
+              <th>Team</th>
+              <th>Win match</th>
+              <th>If it wins</th>
+              <th>If it loses</th>
+              <th>Swing</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ match, teams }) =>
+              teams.map((t, i) => (
+                <tr key={`${match.stageId}/${match.matchId}/${t.id}`}>
+                  {i === 0 && (
+                    <td rowSpan={2}>
+                      {tournament.teams[teams[0].id].name} vs {tournament.teams[teams[1].id].name}
+                      <span className="muted odds__what">
+                        {stageName(match.stageId)} · {advancing.has(match.stageId) ? 'advance' : 'win'}
+                      </span>
+                    </td>
+                  )}
+                  <td>{tournament.teams[t.id].name}</td>
+                  <td>{percent(t.wins)}</td>
+                  <td>
+                    <span className="odds__bar" style={{ ['--p' as string]: t.ifWin }} />
+                    {percent(t.ifWin)}
+                  </td>
+                  <td>
+                    <span className="odds__bar" style={{ ['--p' as string]: t.ifLose }} />
+                    {percent(t.ifLose)}
+                  </td>
+                  <td>{points(t.ifWin - t.ifLose)}</td>
+                </tr>
+              )),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }

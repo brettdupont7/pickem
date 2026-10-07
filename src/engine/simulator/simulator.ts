@@ -1,4 +1,4 @@
-import type { GameResult, Match, MatchReport, StageId, TeamId, Tournament, TournamentResults } from '../../types'
+import type { GameResult, Match, MatchId, MatchReport, StageId, TeamId, Tournament, TournamentResults } from '../../types'
 import { createRng } from '../random'
 import { resolveForMatch, winsNeeded } from '../results'
 import { FREE_SCORING, scoreModelFor, type GameScoreModel } from '../rules'
@@ -39,6 +39,20 @@ export function gameChanceForBestOf3(series: number): number {
   return (lo + hi) / 2
 }
 
+/** Chance of winning `need` games before losing `otherNeeds`, winning each game with chance `p`. */
+export function seriesChance(p: number, need: number, otherNeeds: number): number {
+  if (need <= 0) return 1
+  if (otherNeeds <= 0) return 0
+  // Win the last game, having lost k of the games before it.
+  let total = 0
+  let ways = 1
+  for (let k = 0; k < otherNeeds; k++) {
+    if (k > 0) ways = (ways * (need - 1 + k)) / k
+    total += ways * p ** need * (1 - p) ** k
+  }
+  return total
+}
+
 export function createSimulator(tournament: Tournament, options: SimulationOptions = {}) {
   const scoring = tournament.rules?.scoring ?? FREE_SCORING
   const { defaultRating = 1500, chaos = 0, detail = 'games' } = options
@@ -58,6 +72,17 @@ export function createSimulator(tournament: Tournament, options: SimulationOptio
     const elo = 1 / (1 + 10 ** (((rating(b) - rating(a)) * (1 - chaos)) / 400))
     const predicted = floor + (1 - 2 * floor) * elo
     return seriesBasis ? gameChanceForBestOf3(predicted) : predicted
+  }
+
+  /**
+   * Chance that the team in the first slot wins the match, continuing from
+   * any series score already recorded.
+   */
+  const matchWinProbability = (match: Match, current: MatchReport | undefined = match.report) => {
+    const [a, b] = match.slots.map((s) => s.teamId!)
+    const score = resolveForMatch(current, match, scoring).report?.score
+    const needed = winsNeeded(match.bestOf)
+    return seriesChance(gameWinProbability(a, b), needed - (score?.[a] ?? 0), needed - (score?.[b] ?? 0))
   }
 
   /**
@@ -95,7 +120,7 @@ export function createSimulator(tournament: Tournament, options: SimulationOptio
     return report
   }
 
-  return { gameWinProbability, simulateMatch, rating }
+  return { gameWinProbability, matchWinProbability, simulateMatch, rating }
 }
 
 export type SimulationScope =
@@ -168,9 +193,28 @@ export interface TeamOdds {
   champion: number
 }
 
+/**
+ * A match that could be played when the simulations started, with each
+ * team's odds in the match's stage depending on who wins it.
+ */
+export interface MatchOdds {
+  stageId: StageId
+  matchId: MatchId
+  teams: [TeamId, TeamId]
+  /** Share of simulations the first team won. */
+  firstWins: number
+  /**
+   * ifWins[winner][team][i] = chance that `team` finishes the stage in
+   * place i + 1 when `winner` wins this match. Both teams are included.
+   */
+  ifWins: Record<TeamId, Record<TeamId, number[]>>
+}
+
 export interface MonteCarloResult {
   iterations: number
   teams: Record<TeamId, TeamOdds>
+  /** Matches playable at the start, in play order. */
+  matches: MatchOdds[]
 }
 
 /**
@@ -192,6 +236,20 @@ export function createMonteCarlo(tournament: Tournament, results: TournamentResu
   const champions = new Map<TeamId, number>()
   const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1)
 
+  // Matches that can be played now, and per winner: wins, and places of both teams.
+  const initial = computeTournament(tournament, results)
+  const tracked = stages.flatMap((stage) =>
+    (initial.stages[stage.id]?.matches ?? []).filter(isPlayable).map((m) => ({
+      stageId: stage.id,
+      matchId: m.id,
+      teams: m.slots.map((s) => s.teamId!) as [TeamId, TeamId],
+      wins: new Map<TeamId, number>(),
+      places: new Map<string, number[]>(),
+    })),
+  )
+  const trackedIn = new Map<StageId, typeof tracked>()
+  for (const t of tracked) trackedIn.set(t.stageId, [...(trackedIn.get(t.stageId) ?? []), t])
+
   function runOnce() {
     const computed: Record<StageId, ComputedStage> = {}
     for (const stage of stages) {
@@ -205,6 +263,20 @@ export function createMonteCarlo(tournament: Tournament, results: TournamentResu
       }
       computed[stage.id] = state
       if (state.status !== 'complete') continue
+
+      for (const t of trackedIn.get(stage.id) ?? []) {
+        const winner = reports[t.matchId]?.winnerId
+        if (!winner || !t.teams.includes(winner)) continue
+        t.wins.set(winner, (t.wins.get(winner) ?? 0) + 1)
+        for (const team of t.teams) {
+          const i = state.ranking.indexOf(team)
+          if (i < 0) continue
+          const key = `${winner}>${team}`
+          const counts = t.places.get(key) ?? []
+          counts[i] = (counts[i] ?? 0) + 1
+          t.places.set(key, counts)
+        }
+      }
 
       state.ranking.forEach((teamId, i) => {
         const key = `${teamId}@${stage.id}`
@@ -247,7 +319,17 @@ export function createMonteCarlo(tournament: Tournament, results: TournamentResu
         }
         teams[teamId] = odds
       }
-      return { iterations, teams }
+      const matches: MatchOdds[] = tracked.map((t) => {
+        const ifWins: MatchOdds['ifWins'] = {}
+        for (const winner of t.teams) {
+          const n = t.wins.get(winner) ?? 0
+          ifWins[winner] = Object.fromEntries(
+            t.teams.map((team) => [team, Array.from(t.places.get(`${winner}>${team}`) ?? [], (c) => (n ? (c ?? 0) / n : 0))]),
+          )
+        }
+        return { stageId: t.stageId, matchId: t.matchId, teams: t.teams, firstWins: share(t.wins.get(t.teams[0])), ifWins }
+      })
+      return { iterations, teams, matches }
     },
   }
 }

@@ -1,5 +1,5 @@
 import { describeMatch, resolveForMatch } from '../../engine'
-import { useTournamentStore } from '../../store/tournament'
+import { useMatchOdds, useTournamentStore } from '../../store/tournament'
 import { useUiStore } from '../../store/ui'
 import type { Match, StageId } from '../../types'
 import { useIsPreview, useTeams } from './preview'
@@ -31,6 +31,8 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
   const resultView = useTournamentStore((s) => s.editSource)
   const storedPick = useTournamentStore((s) => s.picks[stageId]?.[match.id])
   const openEditor = useUiStore((s) => s.openEditor)
+  const showOdds = useUiStore((s) => s.showMatchOdds)
+  const matchOdds = useMatchOdds()
 
   // A match between two byes never happens. Keep a full-size invisible card
   // so every match in a round is the same height and the bracket lines up.
@@ -50,6 +52,9 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
   // The pick an actual result is hiding, marked right or wrong.
   const pickedId = locked && storedPick ? resolveForMatch(storedPick, match, scoring).result?.winnerId : undefined
   const pickRight = pickedId !== undefined && pickedId === match.result?.winnerId
+  // Each team's chance to win, for matches still to be decided.
+  const firstWins = showOdds && !preview && (view.status === 'ready' || view.status === 'live') ? matchOdds(match) : null
+  const chanceFor = (slot: 0 | 1) => (firstWins === null ? null : slot === 0 ? firstWins : 1 - firstWins)
   const singleGameScore = match.bestOf === 1 ? view.games[0]?.score : undefined
 
   const scoreFor = (slot: 0 | 1) => {
@@ -65,6 +70,12 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
     const lost = view.status !== 'bye' && view.winnerSlot !== null && !won
     const score = scoreFor(slot)
     const name = team?.name ?? teamId ?? expected ?? (isBye ? 'Bye' : 'TBD')
+    const chance = chanceFor(slot)
+    const odds = chance !== null && (
+      <span className="match__odds" title={`${name}: ${formatChance(chance)} to win, from team ratings`}>
+        {formatChance(chance)}
+      </span>
+    )
     return (
       <button
         key={slot}
@@ -87,14 +98,19 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
       >
         {variant === 'row' ? (
           // The mark sits on the badge's corner, so it stays inside the card on either side.
-          <span className="match__badge">
-            <TeamBadge team={team} />
-            {pickedId === teamId && <PickMark right={pickRight} name={name} />}
-          </span>
+          <>
+            {slot === 1 && odds}
+            <span className="match__badge">
+              <TeamBadge team={team} />
+              {pickedId === teamId && <PickMark right={pickRight} name={name} />}
+            </span>
+            {slot === 0 && odds}
+          </>
         ) : (
           <>
             <span className="match__name">{name}</span>
             {pickedId === teamId && <PickMark right={pickRight} name={name} />}
+            {odds}
             {score !== null && <span className="match__score">{score}</span>}
             {advance && <AdvanceMark advance={advance(slot)} />}
           </>
@@ -160,6 +176,9 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
     </div>
   )
 }
+
+/** A win chance, never shown as a certainty while the match is open. */
+const formatChance = (p: number) => `${Math.min(99, Math.max(1, Math.round(p * 100)))}%`
 
 /** Marks the team the user picked, once the actual result is in. */
 function PickMark({ right, name }: { right: boolean; name: string }) {

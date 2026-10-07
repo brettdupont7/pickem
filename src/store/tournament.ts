@@ -7,6 +7,7 @@ import {
   blankTournament,
   clearSimulated,
   computeTournament,
+  createSimulator,
   emptyLayers,
   layerOf,
   pickWinner,
@@ -236,4 +237,23 @@ export function useTournamentState(): TournamentState {
   const tournament = useTournamentStore((s) => s.tournament)
   const results = useViewResults()
   return useMemo(() => computeTournament(tournament, results), [tournament, results])
+}
+
+/** One match-odds function for every card: rebuilt only when the design, actual results or chaos change. */
+let lastOdds: { tournament: Tournament; actual: TournamentResults; chaos: number; odds: (match: Match) => number } | null = null
+
+/**
+ * Chance that the first team wins a match, from team ratings (adjusted for
+ * form when the tournament uses it) and the chaos setting, as the Odds tab
+ * simulates it. Counts any series score already recorded.
+ */
+export function useMatchOdds(): (match: Match) => number {
+  const tournament = useTournamentStore((s) => s.tournament)
+  const actual = useTournamentStore((s) => s.actual)
+  const chaos = useTournamentStore((s) => s.simulation.chaos ?? 0)
+  if (!lastOdds || lastOdds.tournament !== tournament || lastOdds.actual !== actual || lastOdds.chaos !== chaos) {
+    const { matchWinProbability } = createSimulator(tournament, { chaos, ratings: simulationRatings(tournament, actual) })
+    lastOdds = { tournament, actual, chaos, odds: (match) => matchWinProbability(match) }
+  }
+  return lastOdds.odds
 }

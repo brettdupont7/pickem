@@ -424,12 +424,17 @@ input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
-.match--row .match__team {
-  gap: 4px;
-}
-
+/* On the Swiss grid's narrow cards the odds sit across the bottom of the badge, like the pick mark. */
 .match--row .match__odds {
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%);
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--surface);
   font-size: 10px;
+  line-height: 1.3;
 }
 
 .is-winner .match__score {

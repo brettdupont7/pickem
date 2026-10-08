@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addBlankTeam, addTeams, formatRanges, placementUses, seedByRank, teamEntries, updateStage } from '../../engine'
+import { addBlankTeam, addTeams, formatRanges, placementUses, seedByRank, seedByRating, teamEntries, updateStage } from '../../engine'
 import type { EntrantSource, Stage, StageId, Tournament } from '../../types'
 import { PasteTeams } from '../common/PasteTeams'
 import { NumberInput } from './fields'
@@ -18,6 +18,8 @@ export function EntrantsEditor({ tournament, stage, update }: Props) {
   // Offered once at least two invited teams have a ranking (e.g. VRS) to seed by.
   const ranked = stage.entrants.flatMap((e) => (e.kind === 'team' && tournament.teams[e.teamId]?.ratingSource ? [tournament.teams[e.teamId].ratingSource!] : []))
   const rankedCatalog = ranked.length >= 2 ? ranked[0].catalog.toUpperCase() : null
+  // Likewise once at least two invited teams have a rating.
+  const rated = stage.entrants.filter((e) => e.kind === 'team' && tournament.teams[e.teamId]?.rating !== undefined).length >= 2
   const stageName = (id: StageId) => tournament.stages.find((s) => s.id === id)?.name ?? id
 
   const setEntrants = (fn: (entrants: EntrantSource[]) => EntrantSource[]) =>
@@ -139,6 +141,15 @@ export function EntrantsEditor({ tournament, stage, update }: Props) {
         <button className="button" onClick={() => setPasting(!pasting)}>
           Paste teams…
         </button>
+        {rated && (
+          <button
+            className="button button--ghost"
+            onClick={() => update((t) => seedByRating(t, stage.id))}
+            title="Order the invited teams by their Teams-tab rating, highest first; unrated teams go last. Places from earlier stages keep their slots."
+          >
+            Seed by rating
+          </button>
+        )}
         {rankedCatalog && (
           <button
             className="button button--ghost"

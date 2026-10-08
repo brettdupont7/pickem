@@ -262,6 +262,34 @@ export function removeTeams(tournament: Tournament, teamIds: Iterable<TeamId>): 
   return { ...tournament, teams, stages }
 }
 
+/**
+ * Re-seeds a stage's invited teams by `score`, lowest first. Teams move only
+ * among the invited-team slots; places from earlier stages keep their slots.
+ * Teams without a score go last, and ties keep their current order.
+ */
+export function seedInvitedTeams(
+  tournament: Tournament,
+  stageId: StageId,
+  score: (team: Team | undefined) => number | undefined,
+): Tournament {
+  return updateStage(tournament, stageId, (stage) => {
+    const slots = stage.entrants.flatMap((e, i) => (e.kind === 'team' ? [i] : []))
+    const key = (i: number) => {
+      const e = stage.entrants[i]
+      return (e.kind === 'team' ? score(tournament.teams[e.teamId]) : undefined) ?? Infinity
+    }
+    const sorted = [...slots].sort((a, b) => key(a) - key(b) || a - b)
+    const entrants = [...stage.entrants]
+    slots.forEach((slot, n) => (entrants[slot] = stage.entrants[sorted[n]]))
+    return { ...stage, entrants }
+  })
+}
+
+/** Re-seeds a stage's invited teams by rating, highest first; unrated teams go last. */
+export function seedByRating(tournament: Tournament, stageId: StageId): Tournament {
+  return seedInvitedTeams(tournament, stageId, (team) => (team?.rating === undefined ? undefined : -team.rating))
+}
+
 /** Stage each team is entered in directly. */
 export function teamEntries(tournament: Tournament): Map<TeamId, StageId> {
   const entries = new Map<TeamId, StageId>()

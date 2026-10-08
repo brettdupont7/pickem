@@ -157,16 +157,23 @@ export function RulesEditor({ rules, onChange }: { rules: GameRules | undefined;
 
       <Field
         label="Form"
-        hint="Odds start from each team's rating and update it after every actual result, so they follow form between ranking releases. Picks don't count. K is the most one result can move a rating."
+        hint="Odds start from each team's rating and update it after every actual result, so they follow form between ranking releases. With Count picks too, picks and simulated results also count in the Picks view; the Actual results view always uses actual results only. K is the most one result can move a rating."
       >
         <div className="row">
           <Check
             label="Update ratings from actual results"
             checked={!!current.formK}
-            onChange={(on) => onChange({ ...current, formK: on ? DEFAULT_FORM_K : undefined })}
+            onChange={(on) => onChange({ ...current, formK: on ? DEFAULT_FORM_K : undefined, formFromPicks: on ? current.formFromPicks : undefined })}
           />
           {current.formK !== undefined && (
-            <NumberInput min={1} value={current.formK} label="Form K-factor" onChange={(k) => onChange({ ...current, formK: k ?? DEFAULT_FORM_K })} />
+            <>
+              <NumberInput min={1} value={current.formK} label="Form K-factor" onChange={(k) => onChange({ ...current, formK: k ?? DEFAULT_FORM_K })} />
+              <Check
+                label="Count picks too"
+                checked={!!current.formFromPicks}
+                onChange={(on) => onChange({ ...current, formFromPicks: on || undefined })}
+              />
+            </>
           )}
         </div>
       </Field>

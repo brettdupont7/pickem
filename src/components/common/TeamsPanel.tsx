@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { addBlankTeam, addTeams, formRatings, removeTeam, removeTeams, renameTeams, teamEntries, termsFor } from '../../engine'
-import { useTournamentState, useTournamentStore } from '../../store/tournament'
+import { useTournamentState, useTournamentStore, useViewResults } from '../../store/tournament'
 import type { ComputedStage } from '../../engine'
 import type { Stage, StageId, SwissConfig, Team, TeamId } from '../../types'
 import { PasteTeams } from './PasteTeams'
@@ -41,9 +41,11 @@ export function TeamsPanel() {
   const entries = useMemo(() => teamEntries(tournament), [tournament])
   const stageName = (id: string) => tournament.stages.find((s) => s.id === id)?.name ?? id
   const state = useTournamentState()
-  const actual = useTournamentStore((s) => s.actual)
-  // Ratings after actual results, when the tournament's rules switch form on.
-  const form = useMemo(() => (tournament.rules?.formK ? formRatings(tournament, actual) : null), [tournament, actual])
+  const results = useViewResults()
+  const view = useTournamentStore((s) => s.editSource)
+  // Ratings after this view's results, when the tournament's rules switch form on.
+  const form = useMemo(() => (tournament.rules?.formK ? formRatings(tournament, results) : null), [tournament, results])
+  const formFrom = tournament.rules?.formFromPicks && view === 'pick' ? 'actual results and picks' : 'actual results'
   const live = useMemo(() => liveRatings(tournament.stages, state.stages), [tournament.stages, state.stages])
   // Pairing ratings only decide Swiss matchups, so they're hidden unless asked for.
   const [showPairingPref, setShowPairingPref] = useState(readShowPairing)
@@ -256,7 +258,7 @@ export function TeamsPanel() {
                   />
                 </td>
                 {form && (
-                  <td className="teams__live" title="Rating after this tournament's actual results; the odds use this">
+                  <td className="teams__live" title={`Rating after this tournament's ${formFrom}; the odds use this`}>
                     {Math.round(form[team.id])}
                     {team.rating !== undefined && Math.round(form[team.id]) !== Math.round(team.rating) && (
                       <span className={`teams__delta ${form[team.id] > team.rating ? 'is-up' : 'is-down'}`}>

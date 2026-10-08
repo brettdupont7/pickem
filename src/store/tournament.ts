@@ -163,7 +163,7 @@ export const useTournamentStore = create<TournamentStore>()(
             if (editSource !== 'pick') return {}
             const viewed = viewResults(tournament, { actual, picks }, 'pick')
             // A fresh seed each time so repeated clicks give different outcomes.
-            const ratings = simulationRatings(tournament, actual)
+            const ratings = simulationRatings(tournament, viewed)
             const next = simulate(tournament, viewed, scope, { ...simulation, ratings, seed: Date.now() })
             return { picks: absorbPicks(picks, next) }
           }),
@@ -239,21 +239,32 @@ export function useTournamentState(): TournamentState {
   return useMemo(() => computeTournament(tournament, results), [tournament, results])
 }
 
-/** One match-odds function for every card: rebuilt only when the design, actual results or chaos change. */
-let lastOdds: { tournament: Tournament; actual: TournamentResults; chaos: number; odds: (match: Match) => number } | null = null
+/** One match-odds function for every card: rebuilt only when the design, the results form uses, or chaos change. */
+let lastOdds: {
+  tournament: Tournament
+  actual: TournamentResults
+  picks: TournamentResults | null
+  chaos: number
+  odds: (match: Match) => number
+} | null = null
 
 /**
  * Chance that the first team wins a match, from team ratings (adjusted for
- * form when the tournament uses it) and the chaos setting, as the Odds tab
+ * form when the tournament uses it, counting picks when it says so) and the chaos setting, as the Odds tab
  * simulates it. Counts any series score already recorded.
  */
 export function useMatchOdds(): (match: Match) => number {
   const tournament = useTournamentStore((s) => s.tournament)
   const actual = useTournamentStore((s) => s.actual)
   const chaos = useTournamentStore((s) => s.simulation.chaos ?? 0)
-  if (!lastOdds || lastOdds.tournament !== tournament || lastOdds.actual !== actual || lastOdds.chaos !== chaos) {
-    const { matchWinProbability } = createSimulator(tournament, { chaos, ratings: simulationRatings(tournament, actual) })
-    lastOdds = { tournament, actual, chaos, odds: (match) => matchWinProbability(match) }
+  // Picks only matter when they count towards form, and only in the picks view.
+  const picks = useTournamentStore((s) =>
+    s.editSource === 'pick' && s.tournament.rules?.formK && s.tournament.rules.formFromPicks ? s.picks : null,
+  )
+  if (!lastOdds || lastOdds.tournament !== tournament || lastOdds.actual !== actual || lastOdds.picks !== picks || lastOdds.chaos !== chaos) {
+    const results = picks ? viewResults(tournament, { actual, picks }, 'pick') : actual
+    const { matchWinProbability } = createSimulator(tournament, { chaos, ratings: simulationRatings(tournament, results) })
+    lastOdds = { tournament, actual, picks, chaos, odds: (match) => matchWinProbability(match) }
   }
   return lastOdds.odds
 }

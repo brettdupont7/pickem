@@ -47,7 +47,14 @@ export interface GameRules {
   /**
    * When set, the simulator starts each team from its rating and updates it
    * by Elo with this K-factor after every actual result in the tournament,
-   * so odds follow form between ranking releases. Picks don't count.
+   * so odds follow form between ranking releases. Picks don't count unless
+   * `formFromPicks` is set.
    */
   formK?: number
+  /**
+   * With `formK`: in the picks view, picks and simulated results also update
+   * form, as if they had happened. The actual results view still uses only
+   * actual results.
+   */
+  formFromPicks?: boolean
 }

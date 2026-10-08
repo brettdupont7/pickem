@@ -42,4 +42,19 @@ describe('formRatings', () => {
     expect(simulationRatings({ ...rated, rules: { ...rated.rules!, formK: undefined } }, {})).toBeUndefined()
     expect(simulationRatings(rated, {})![fav]).toBe(rated.teams[fav].rating)
   })
+
+  it('counts picks and simulated results when the rules say so', () => {
+    const withPicks: Tournament = { ...rated, rules: { ...rated.rules!, formFromPicks: true } }
+    const results = {
+      'stage-1': {
+        [m1.id]: { source: 'pick' as const, winnerId: dog },
+        [m2.id]: { source: 'simulated' as const, winnerId: m2.slots[1].teamId! },
+      },
+    }
+    const ratings = formRatings(withPicks, results)
+    expect(ratings[dog]).toBeGreaterThan(rated.teams[dog].rating!)
+    expect(ratings[m2.slots[1].teamId!]).toBeGreaterThan(rated.teams[m2.slots[1].teamId!].rating!)
+    // Without the rule, the same picks leave ratings alone.
+    expect(formRatings(rated, results)[dog]).toBe(rated.teams[dog].rating)
+  })
 })

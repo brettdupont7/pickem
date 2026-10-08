@@ -290,6 +290,20 @@ export function seedByRating(tournament: Tournament, stageId: StageId): Tourname
   return seedInvitedTeams(tournament, stageId, (team) => (team?.rating === undefined ? undefined : -team.rating))
 }
 
+/** Moves a stage's invited teams above its places from earlier stages, keeping each group's order. */
+export function invitesFirst(tournament: Tournament, stageId: StageId): Tournament {
+  return updateStage(tournament, stageId, (stage) => ({
+    ...stage,
+    entrants: [...stage.entrants.filter((e) => e.kind === 'team'), ...stage.entrants.filter((e) => e.kind !== 'team')],
+  }))
+}
+
+/** Whether any place from an earlier stage is seeded above an invited team. */
+export function placesBeforeInvites(stage: Stage): boolean {
+  const firstPlace = stage.entrants.findIndex((e) => e.kind === 'placement')
+  return firstPlace >= 0 && stage.entrants.slice(firstPlace).some((e) => e.kind === 'team')
+}
+
 /** Stage each team is entered in directly. */
 export function teamEntries(tournament: Tournament): Map<TeamId, StageId> {
   const entries = new Map<TeamId, StageId>()

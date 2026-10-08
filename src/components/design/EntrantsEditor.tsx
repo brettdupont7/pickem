@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addBlankTeam, addTeams, formatRanges, placementUses, seedByRank, seedByRating, teamEntries, updateStage } from '../../engine'
+import { addBlankTeam, addTeams, formatRanges, invitesFirst, placementUses, placesBeforeInvites, seedByRank, seedByRating, teamEntries, updateStage } from '../../engine'
 import type { EntrantSource, Stage, StageId, Tournament } from '../../types'
 import { PasteTeams } from '../common/PasteTeams'
 import { NumberInput } from './fields'
@@ -141,6 +141,15 @@ export function EntrantsEditor({ tournament, stage, update }: Props) {
         <button className="button" onClick={() => setPasting(!pasting)}>
           Paste teams…
         </button>
+        {placesBeforeInvites(stage) && (
+          <button
+            className="button button--ghost"
+            onClick={() => update((t) => invitesFirst(t, stage.id))}
+            title="Move the invited teams above the places from earlier stages, as CS2 Majors seed invites 1–8 and qualifiers 9–16. Each group keeps its order."
+          >
+            Invited teams first
+          </button>
+        )}
         {rated && (
           <button
             className="button button--ghost"

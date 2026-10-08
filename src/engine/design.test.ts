@@ -13,8 +13,10 @@ import {
   eliminationRounds,
   formatRanges,
   instantiate,
+  invitesFirst,
   moveStageToPhase,
   normalizePhases,
+  placesBeforeInvites,
   previewStage,
   removeStage,
   removeTeam,
@@ -133,6 +135,17 @@ describe('teams', () => {
     const stageId = rated.stages[0].id
     const seeded = seedByRating({ ...rated, stages: [{ ...rated.stages[0], entrants }] }, stageId)
     expect(seeded.stages[0].entrants).toEqual([team('team-3'), team('team-1'), placement, team('team-4'), team('team-2')])
+  })
+
+  it('moves invited teams above places, keeping each group in order', () => {
+    const t = blankTournament()
+    const place = (n: number) => ({ kind: 'placement' as const, stageId: 'earlier', place: n })
+    const team = (teamId: string) => ({ kind: 'team' as const, teamId })
+    const stage = { ...t.stages[0], entrants: [place(1), team('team-2'), place(2), team('team-1')] }
+    expect(placesBeforeInvites(stage)).toBe(true)
+    const moved = invitesFirst({ ...t, stages: [stage] }, stage.id)
+    expect(moved.stages[0].entrants).toEqual([team('team-2'), team('team-1'), place(1), place(2)])
+    expect(placesBeforeInvites(moved.stages[0])).toBe(false)
   })
 })
 

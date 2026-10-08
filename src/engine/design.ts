@@ -13,7 +13,7 @@ import type {
 import { buildDoubleElim } from './double-elim'
 import { bracketSize } from './elimination/bracket'
 import { buildSingleElim } from './single-elim'
-import { computeStageIn, playOrder, type ComputedStage } from './tournament'
+import { computeStageIn, placesOf, playOrder, type ComputedStage } from './tournament'
 
 /** Helpers for editing a tournament's design. All return new objects. */
 
@@ -441,18 +441,37 @@ function placeholderShortName(stageName: string, place: number) {
   return `${prefix}·${place}`.slice(0, 4)
 }
 
+const PLACEHOLDER_PREFIX = 'preview:'
+
+/** Whether a team in a stage preview stands in for a place in an earlier stage. */
+export const isPlaceholderTeam = (teamId: TeamId | null | undefined) => !!teamId?.startsWith(PLACEHOLDER_PREFIX)
+
+/** The team certain to finish at `place` in a computed stage, if that's settled yet. */
+function teamAtPlace(computed: ComputedStage | undefined, place: number): TeamId | undefined {
+  if (computed?.status === 'complete') return computed.ranking[place - 1]
+  return Object.entries(placesOf(computed)).find(([, [lo, hi]]) => lo === place && hi === place)?.[0]
+}
+
 /**
  * Computes a stage as it would start, without results, with placements
  * from earlier stages standing in as placeholder teams ("3rd in Stage 1").
+ * Given the earlier stages' state, a place that's already settled shows the
+ * team that holds it instead.
  */
-export function previewStage(tournament: Tournament, stageId: StageId): { computed: ComputedStage; teams: Record<TeamId, Team>; stage: Stage } | null {
+export function previewStage(
+  tournament: Tournament,
+  stageId: StageId,
+  earlier: Record<StageId, ComputedStage> = {},
+): { computed: ComputedStage; teams: Record<TeamId, Team>; stage: Stage } | null {
   const stage = tournament.stages.find((s) => s.id === stageId)
   if (!stage) return null
   const teams: Record<TeamId, Team> = { ...tournament.teams }
   const entrants: EntrantSource[] = stage.entrants.map((e, i) => {
     if (e.kind === 'team') return e
+    const settled = teamAtPlace(earlier[e.stageId], e.place)
+    if (settled) return { kind: 'team', teamId: settled }
     const from = tournament.stages.find((s) => s.id === e.stageId)?.name ?? e.stageId
-    const id = `preview:${i}`
+    const id = `${PLACEHOLDER_PREFIX}${i}`
     teams[id] = { id, name: `${ordinal(e.place)} in ${from}`, shortName: placeholderShortName(from, e.place) }
     return { kind: 'team', teamId: id }
   })

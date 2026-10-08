@@ -416,6 +416,27 @@ input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
+/* A team's chance to win a match still to be decided. */
+.match__odds {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* On the Swiss grid's narrow cards the odds sit across the bottom of the badge, like the pick mark. */
+.match--row .match__odds {
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%);
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
 .is-winner .match__score {
   color: var(--win);
 }
@@ -1478,6 +1499,21 @@ input[type='number'] {
   .toolbar__spacer {
     display: none;
   }
+}
+
+/* Matches that matter, under the odds table. */
+.swings {
+  margin-top: 24px;
+}
+
+.swings h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.swings__table td[rowspan] {
+  vertical-align: top;
+  border-right: 1px solid var(--border);
 }
 
 /* "advance" / "win" under each stage name in the odds table. */

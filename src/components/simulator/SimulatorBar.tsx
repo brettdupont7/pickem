@@ -1,5 +1,18 @@
 import { useTournamentStore } from '../../store/tournament'
+import { useUiStore } from '../../store/ui'
 import type { StageId } from '../../types'
+
+/** Shows or hides each team's chance to win on open matches. */
+function MatchOddsToggle() {
+  const show = useUiStore((s) => s.showMatchOdds)
+  const setShow = useUiStore((s) => s.setShowMatchOdds)
+  return (
+    <label className="check" title="Each team's chance to win matches still to be played, from team ratings">
+      <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+      Match odds
+    </label>
+  )
+}
 
 export function SimulatorBar({ activeStageId }: { activeStageId: StageId | null }) {
   const simulate = useTournamentStore((s) => s.simulate)
@@ -14,6 +27,7 @@ export function SimulatorBar({ activeStageId }: { activeStageId: StageId | null 
     return (
       <div className="toolbar">
         <span className="hint">Showing actual results only. Your picks are kept and shown under Picks.</span>
+        <MatchOddsToggle />
         <span className="toolbar__spacer" />
         <button
           className="button button--ghost"
@@ -60,6 +74,7 @@ export function SimulatorBar({ activeStageId }: { activeStageId: StageId | null 
         <option value="series">Series scores</option>
         <option value="winner">Winners only</option>
       </select>
+      <MatchOddsToggle />
       <span className="toolbar__spacer" />
       <button className="button button--ghost" onClick={clearSimulated}>
         Clear simulated

@@ -4,7 +4,7 @@ import type { BestOf, Match, Tournament } from '../../types'
 import { createRng } from '../random'
 import { resolveReport, setGame } from '../results'
 import { computeTournament } from '../tournament'
-import { clearSimulated, createSimulator, gameChanceForBestOf3, runMonteCarlo, simulate } from './simulator'
+import { clearSimulated, createSimulator, gameChanceForBestOf3, runMonteCarlo, seriesChance, simulate } from './simulator'
 
 const duel = (ratings: [number, number], ratingBasis: 'game' | 'series' = 'game', upsetFloor = 0): Tournament => ({
   ...cs2Major,
@@ -117,6 +117,28 @@ describe('simulateMatch', () => {
   })
 })
 
+describe('matchWinProbability', () => {
+  it('works out series odds from game odds', () => {
+    expect(seriesChance(0.6, 1, 1)).toBeCloseTo(0.6, 9)
+    expect(seriesChance(0.6, 2, 2)).toBeCloseTo(0.6 * 0.6 * (3 - 2 * 0.6), 9)
+    expect(seriesChance(0.5, 3, 3)).toBeCloseTo(0.5, 9)
+    expect(seriesChance(0.3, 0, 2)).toBe(1)
+    expect(seriesChance(0.9, 2, 0)).toBe(0)
+  })
+
+  it('gives Elo odds for a best-of-3 with a series basis', () => {
+    const { matchWinProbability } = createSimulator(duel([1800, 1500], 'series', 0.1))
+    expect(matchWinProbability(match(3))).toBeCloseTo(0.1 + 0.8 / (1 + 10 ** (-300 / 400)), 6)
+  })
+
+  it('continues from the series score', () => {
+    const { matchWinProbability } = createSimulator(duel([1500, 1500]))
+    // Level teams, 1-0 up in a Bo3: win either of up to two games.
+    expect(matchWinProbability({ ...match(3), report: { source: 'actual', score: { a: 1, b: 0 } } })).toBeCloseTo(0.75, 9)
+    expect(matchWinProbability(match(3), { source: 'actual', score: { a: 0, b: 1 } })).toBeCloseTo(0.25, 9)
+  })
+})
+
 describe('simulate', () => {
   const statusOf = (results: ReturnType<typeof simulate>) =>
     Object.fromEntries(Object.entries(computeTournament(cs2Major, results).stages).map(([id, s]) => [id, s.status]))
@@ -198,5 +220,24 @@ describe('runMonteCarlo', () => {
     const results = simulate(rated, {}, { kind: 'tournament' }, { seed: 9 })
     const champion = computeTournament(rated, results).stages.playoffs.ranking[0]
     expect(runMonteCarlo(rated, results, 20).teams[champion].champion).toBe(1)
+  })
+
+  it("splits each open match's odds by who wins it", () => {
+    const { matches } = runMonteCarlo(rated, {}, 400, { seed: 3 })
+    // Stage 1's first round: the only matches that can be played.
+    expect(matches).toHaveLength(8)
+    expect(matches.every((m) => m.stageId === 'stage-1')).toBe(true)
+    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
+    for (const m of matches) {
+      const [a, b] = m.teams
+      expect(m.firstWins).toBeGreaterThan(0)
+      expect(m.firstWins).toBeLessThan(1)
+      // Every run places both teams, whoever wins.
+      for (const winner of m.teams) for (const team of m.teams) expect(sum(m.ifWins[winner][team])).toBeCloseTo(1)
+      // Winning a match helps: more top-8 finishes than losing it.
+      const top8 = (winner: string, team: string) => sum(m.ifWins[winner][team].slice(0, 8))
+      expect(top8(a, a)).toBeGreaterThan(top8(b, a))
+      expect(top8(b, b)).toBeGreaterThan(top8(a, b))
+    }
   })
 })

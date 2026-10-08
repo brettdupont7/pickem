@@ -1016,7 +1016,7 @@ input[type='number'] {
   pointer-events: none;
 }
 
-.teams__table input:not([type='number']) {
+.teams__table input:not([type='number'], [type='checkbox']) {
   width: 200px;
 }
 
@@ -1059,6 +1059,15 @@ input[type='number'] {
 
 .teams__actions {
   margin: 8px 0;
+}
+
+.teams__table .teams__select {
+  width: 1%;
+  padding-right: 0;
+}
+
+.teams__table tr.is-selected td {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .teams__delta {

@@ -247,11 +247,17 @@ export function renameTeams(tournament: Tournament, names: string[]): Tournament
 
 /** Removes a team and every entrant slot that named it. */
 export function removeTeam(tournament: Tournament, teamId: TeamId): Tournament {
+  return removeTeams(tournament, [teamId])
+}
+
+/** Removes several teams and every entrant slot that named one of them. */
+export function removeTeams(tournament: Tournament, teamIds: Iterable<TeamId>): Tournament {
+  const removed = new Set(teamIds)
   const teams = { ...tournament.teams }
-  delete teams[teamId]
+  for (const id of removed) delete teams[id]
   const stages = tournament.stages.map((s) => ({
     ...s,
-    entrants: s.entrants.filter((e) => !(e.kind === 'team' && e.teamId === teamId)),
+    entrants: s.entrants.filter((e) => !(e.kind === 'team' && removed.has(e.teamId))),
   }))
   return { ...tournament, teams, stages }
 }

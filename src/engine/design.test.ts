@@ -18,6 +18,7 @@ import {
   previewStage,
   removeStage,
   removeTeam,
+  removeTeams,
   renameTeams,
   setFromFinal,
   uniqueId,
@@ -104,6 +105,14 @@ describe('teams', () => {
     const removed = removeTeam(renamed, 'team-1')
     expect(removed.teams['team-1']).toBeUndefined()
     expect(removed.stages[0].entrants).toHaveLength(7)
+  })
+
+  it('removes several teams at once', () => {
+    const removed = removeTeams(blankTournament(), ['team-1', 'team-3', 'team-missing'])
+    expect(Object.keys(removed.teams)).not.toContain('team-1')
+    expect(Object.keys(removed.teams)).not.toContain('team-3')
+    expect(Object.keys(removed.teams)).toHaveLength(6)
+    expect(removed.stages[0].entrants).toHaveLength(6)
   })
 })
 

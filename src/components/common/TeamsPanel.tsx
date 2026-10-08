@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addBlankTeam, addTeams, formRatings, removeTeam, renameTeams, teamEntries, termsFor } from '../../engine'
+import { addBlankTeam, addTeams, formRatings, removeTeam, removeTeams, renameTeams, teamEntries, termsFor } from '../../engine'
 import { useTournamentState, useTournamentStore } from '../../store/tournament'
 import type { ComputedStage } from '../../engine'
 import type { Stage, StageId, SwissConfig, Team, TeamId } from '../../types'
@@ -82,6 +82,18 @@ export function TeamsPanel() {
   const ids = Object.keys(teams)
   const rows = sort ? [...order.filter((id) => teams[id]), ...ids.filter((id) => !order.includes(id))] : ids
 
+  // Ticked teams, for removing several at once; teams removed some other way drop out.
+  const [checked, setChecked] = useState<Set<TeamId>>(() => new Set())
+  const selected = ids.filter((id) => checked.has(id))
+  const allSelected = ids.length > 0 && selected.length === ids.length
+  const toggle = (id: TeamId, on: boolean) =>
+    setChecked((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+
   // What a rating gap means under this tournament's rules, for the hint.
   const rules = tournament.rules
   const ratingScale =
@@ -108,6 +120,20 @@ export function TeamsPanel() {
     update((t) => removeTeam(t, team.id))
   }
 
+  const removeSelected = () => {
+    const entered = selected.filter((id) => entries.has(id)).length
+    const what = selected.length === 1 ? teams[selected[0]].name : `${selected.length} teams`
+    const also =
+      entered === 0
+        ? ''
+        : selected.length === 1
+          ? ` They'll also be taken out of ${stageName(entries.get(selected[0])!)}.`
+          : ` ${entered < selected.length ? `${entered} of them` : selected.length === 2 ? 'Both' : 'All of them'} will also be taken out of the stages they're entered in.`
+    if (!window.confirm(`Remove ${what}?${also}`)) return
+    update((t) => removeTeams(t, selected))
+    setChecked(new Set())
+  }
+
   return (
     <div className="teams">
       <p className="hint">
@@ -124,6 +150,16 @@ export function TeamsPanel() {
         <button className="button" onClick={() => setPasting(!pasting)}>
           Paste team names…
         </button>
+        {selected.length > 0 && (
+          <>
+            <button className="button" onClick={removeSelected}>
+              Remove selected ({selected.length})
+            </button>
+            <button className="button" onClick={() => setChecked(new Set())}>
+              Clear selection
+            </button>
+          </>
+        )}
         {live.size > 0 && (
           <label className="check" title="Ratings a Swiss stage uses to decide who plays whom (an Elo-style stand-in for ESL's live ratings), not team strength">
             <input type="checkbox" checked={showPairing} onChange={(e) => togglePairing(e.target.checked)} />
@@ -145,6 +181,19 @@ export function TeamsPanel() {
         <table className="teams__table">
           <thead>
             <tr>
+              <th className="teams__select">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = selected.length > 0 && !allSelected
+                  }}
+                  onChange={(e) => setChecked(e.target.checked ? new Set(ids) : new Set())}
+                  disabled={ids.length === 0}
+                  aria-label="Select all teams"
+                  title={allSelected ? 'Deselect all' : 'Select all'}
+                />
+              </th>
               <th />
               {header('name')}
               <th>Short name</th>
@@ -159,7 +208,15 @@ export function TeamsPanel() {
           </thead>
           <tbody>
             {rows.map((id) => teams[id]).map((team) => (
-              <tr key={team.id}>
+              <tr key={team.id} className={checked.has(team.id) ? 'is-selected' : undefined}>
+                <td className="teams__select">
+                  <input
+                    type="checkbox"
+                    checked={checked.has(team.id)}
+                    onChange={(e) => toggle(team.id, e.target.checked)}
+                    aria-label={`Select ${team.name}`}
+                  />
+                </td>
                 <td>
                   <TeamBadge team={team} />
                 </td>

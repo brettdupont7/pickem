@@ -175,7 +175,7 @@ export function OddsPanel() {
 
 interface SwingRow {
   match: MatchOdds
-  /** Per team: chance to win the match, and to advance from the stage if it wins or loses. */
+  /** Per team: chance to win the match, and to advance from the stage if they win or lose. */
   teams: { id: string; wins: number; ifWin: number; ifLose: number }[]
   swing: number
 }
@@ -210,13 +210,16 @@ function MatchesThatMatter({
     .sort((x, y) => y.swing - x.swing)
 
   const points = (p: number) => `${p > 0 ? '+' : ''}${Math.round(p * 100)}`
+  // Say what the chances are for when every match agrees; otherwise each match says it under its name.
+  const goals = new Set(rows.map((r) => (advancing.has(r.match.stageId) ? 'Advance' : 'Win it all')))
+  const goal = goals.size === 1 ? `${[...goals][0]} if they` : 'If they'
 
   return (
     <section className="swings">
       <h3>Matches that matter</h3>
       <p className="hint">
         Matches that can be played now, biggest swing first: each team's chance to advance from the stage (or win it, for the
-        last stage) if it wins the match or loses it, and the difference in percentage points.
+        last stage) if they win the match or lose it, and the difference in percentage points.
       </p>
       <div className="table-wrap">
         <table className="odds__table swings__table">
@@ -225,8 +228,8 @@ function MatchesThatMatter({
               <th>Match</th>
               <th>Team</th>
               <th>Win match</th>
-              <th>If it wins</th>
-              <th>If it loses</th>
+              <th>{goal} win</th>
+              <th>{goal} lose</th>
               <th>Swing</th>
             </tr>
           </thead>

@@ -18,7 +18,9 @@ import {
   previewStage,
   removeStage,
   removeTeam,
+  removeTeams,
   renameTeams,
+  seedByRating,
   setFromFinal,
   uniqueId,
   uniqueName,
@@ -104,6 +106,33 @@ describe('teams', () => {
     const removed = removeTeam(renamed, 'team-1')
     expect(removed.teams['team-1']).toBeUndefined()
     expect(removed.stages[0].entrants).toHaveLength(7)
+  })
+
+  it('removes several teams at once', () => {
+    const removed = removeTeams(blankTournament(), ['team-1', 'team-3', 'team-missing'])
+    expect(Object.keys(removed.teams)).not.toContain('team-1')
+    expect(Object.keys(removed.teams)).not.toContain('team-3')
+    expect(Object.keys(removed.teams)).toHaveLength(6)
+    expect(removed.stages[0].entrants).toHaveLength(6)
+  })
+
+  it('seeds invited teams by rating, leaving places and unrated teams after', () => {
+    const t = blankTournament()
+    const rated = {
+      ...t,
+      teams: {
+        ...t.teams,
+        'team-1': { ...t.teams['team-1'], rating: 1600 },
+        'team-3': { ...t.teams['team-3'], rating: 1800 },
+        'team-4': { ...t.teams['team-4'], rating: 1600 },
+      },
+    }
+    const placement = { kind: 'placement' as const, stageId: 'earlier', place: 1 }
+    const team = (teamId: string) => ({ kind: 'team' as const, teamId })
+    const entrants = [team('team-2'), team('team-1'), placement, team('team-4'), team('team-3')]
+    const stageId = rated.stages[0].id
+    const seeded = seedByRating({ ...rated, stages: [{ ...rated.stages[0], entrants }] }, stageId)
+    expect(seeded.stages[0].entrants).toEqual([team('team-3'), team('team-1'), placement, team('team-4'), team('team-2')])
   })
 })
 

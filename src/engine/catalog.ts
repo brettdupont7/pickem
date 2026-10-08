@@ -1,5 +1,5 @@
 import type { Catalog, CatalogEntry, Team, TeamId, Tournament } from '../types'
-import { addTeams } from './design'
+import { addTeams, seedInvitedTeams } from './design'
 
 /** Ranking catalogs: parsing snapshots and linking a tournament's teams to them. */
 
@@ -128,15 +128,5 @@ export function updateRatings(tournament: Tournament, catalog: Catalog): { tourn
  * earlier stages keep their slots, and unranked teams follow ranked ones.
  */
 export function seedByRank(tournament: Tournament, stageId: string): Tournament {
-  const stage = tournament.stages.find((s) => s.id === stageId)
-  if (!stage) return tournament
-  const slots = stage.entrants.flatMap((e, i) => (e.kind === 'team' ? [i] : []))
-  const rank = (i: number) => {
-    const e = stage.entrants[i]
-    return (e.kind === 'team' && tournament.teams[e.teamId]?.ratingSource?.rank) || Infinity
-  }
-  const sorted = [...slots].sort((a, b) => rank(a) - rank(b) || a - b)
-  const entrants = [...stage.entrants]
-  slots.forEach((slot, n) => (entrants[slot] = stage.entrants[sorted[n]]))
-  return { ...tournament, stages: tournament.stages.map((s) => (s.id === stageId ? { ...s, entrants } : s)) }
+  return seedInvitedTeams(tournament, stageId, (team) => team?.ratingSource?.rank || undefined)
 }

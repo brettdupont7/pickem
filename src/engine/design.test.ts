@@ -13,6 +13,7 @@ import {
   eliminationRounds,
   formatRanges,
   instantiate,
+  isPlaceholderTeam,
   invitesFirst,
   moveStageToPhase,
   normalizePhases,
@@ -27,7 +28,7 @@ import {
   uniqueId,
   uniqueName,
 } from './design'
-import { validateTournament } from './tournament'
+import { validateTournament, type ComputedStage } from './tournament'
 
 describe('names and IDs', () => {
   it('finds a free ID or name', () => {
@@ -175,6 +176,24 @@ describe('previewStage', () => {
       '1st in Stage 3',
       '8th in Stage 3',
     ])
+  })
+
+  it('shows teams whose place in an earlier stage is settled', () => {
+    // Stage 3 under way: team-1 can only finish 1st; team-2 could still be 8th or 9th.
+    const stage3 = {
+      stageId: 'stage-3',
+      status: 'in-progress',
+      seeds: [],
+      matches: [],
+      ranking: [],
+      places: { 'team-1': [1, 1], 'team-2': [8, 9] },
+    } as unknown as ComputedStage
+    const preview = previewStage(cs2Major, 'playoffs', { 'stage-3': stage3 })!
+    const [top, eighth] = preview.computed.matches[0].slots.map((s) => s.teamId!)
+    expect(top).toBe('team-1')
+    expect(isPlaceholderTeam(top)).toBe(false)
+    expect(preview.teams[eighth].name).toBe('8th in Stage 3')
+    expect(isPlaceholderTeam(eighth)).toBe(true)
   })
 })
 

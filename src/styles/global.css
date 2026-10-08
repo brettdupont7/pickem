@@ -374,9 +374,16 @@ input[type='number'] {
   font-weight: 600;
 }
 
-.match__team.is-expected {
+.match__team.is-expected,
+.match__team.is-placeholder {
   color: var(--text-muted);
   font-style: italic;
+}
+
+/* A place in an earlier stage standing in for a team not known yet. */
+.match__team.is-placeholder .team-badge {
+  outline: 1px dashed var(--text-muted);
+  outline-offset: 1px;
 }
 
 .match__team.is-loser {

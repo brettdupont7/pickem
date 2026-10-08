@@ -1,4 +1,4 @@
-import { describeMatch, resolveForMatch } from '../../engine'
+import { describeMatch, isPlaceholderTeam, resolveForMatch } from '../../engine'
 import { useMatchOdds, useTournamentStore } from '../../store/tournament'
 import { useUiStore } from '../../store/ui'
 import type { Match, StageId } from '../../types'
@@ -79,7 +79,7 @@ export function MatchCard({ stageId, match, variant = 'stacked', advance }: Prop
     return (
       <button
         key={slot}
-        className={`match__team${won ? ' is-winner' : ''}${lost ? ' is-loser' : ''}${!teamId && expected ? ' is-expected' : ''}`}
+        className={`match__team${won ? ' is-winner' : ''}${lost ? ' is-loser' : ''}${!teamId && expected ? ' is-expected' : ''}${isPlaceholderTeam(teamId) ? ' is-placeholder' : ''}`}
         disabled={!editable}
         onClick={() => teamId && pickWinner(stageId, match, teamId)}
         title={

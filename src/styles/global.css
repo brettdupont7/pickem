@@ -1537,3 +1537,125 @@ input[type='number'] {
   display: block;
   font-weight: normal;
 }
+
+/* Pick'em */
+
+.pickem__total {
+  font-size: 15px;
+}
+
+.pickem__stage {
+  margin-bottom: 28px;
+}
+
+.pickem__stage h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.pickem__bar {
+  margin-bottom: 8px;
+}
+
+.pickem__team {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pickem__table .team-badge {
+  width: 28px;
+  height: 28px;
+}
+
+.pickem__choices button:disabled:not(.is-active) {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pickem__mark {
+  font-weight: 700;
+}
+
+.pickem__mark.is-correct {
+  color: var(--win);
+}
+
+.pickem__mark.is-wrong {
+  color: var(--lose);
+}
+
+.pickem__mark.is-pending {
+  color: var(--text-muted);
+}
+
+.pickem__bracket {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.pickem__round {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.pickem__round-label {
+  font-size: 12px;
+}
+
+.pickem__match {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.pickem__pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.pickem__pick + .pickem__pick {
+  border-top: 1px solid var(--border);
+}
+
+.pickem__pick .team-badge {
+  width: 24px;
+  height: 24px;
+}
+
+.pickem__pick:disabled {
+  cursor: default;
+}
+
+.pickem__pick:not(:disabled):hover {
+  background: var(--surface-2);
+}
+
+.pickem__pick.is-picked {
+  border-left-color: var(--accent);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.pickem__pick-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

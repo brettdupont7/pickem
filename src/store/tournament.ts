@@ -27,13 +27,15 @@ import {
   type SimulationScope,
   type TournamentState,
 } from '../engine'
-import type { Match, MatchId, MatchReport, StageId, TeamId, Tournament, TournamentResults } from '../types'
+import type { Match, MatchId, MatchReport, PickemCard, StageId, TeamId, Tournament, TournamentPickem, TournamentResults } from '../types'
 
 /** A tournament in the library that isn't open. */
 export interface LibraryEntry extends ResultLayers {
   tournament: Tournament
   /** When it was last open, in ms since the epoch. */
   updatedAt: number
+  /** Pick'em cards; absent in entries saved before Pick'em existed. */
+  pickem?: TournamentPickem
 }
 
 interface TournamentStore extends ResultLayers {
@@ -47,6 +49,8 @@ interface TournamentStore extends ResultLayers {
    */
   editSource: ResultView
   simulation: SimulationOptions
+  /** The open tournament's Pick'em cards, apart from picks and results. */
+  pickem: TournamentPickem
 
   /** Saves the open tournament to the library and opens another. */
   openTournament: (id: string) => void
@@ -76,6 +80,9 @@ interface TournamentStore extends ResultLayers {
   clearSimulated: () => void
   /** Clears the viewed layer: every pick and simulation, or every actual result. */
   clearResults: () => void
+
+  /** Replaces a stage's Pick'em card; undefined removes it. */
+  setPickemCard: (stageId: StageId, card: PickemCard | undefined) => void
 }
 
 export const useTournamentStore = create<TournamentStore>()(
@@ -92,8 +99,8 @@ export const useTournamentStore = create<TournamentStore>()(
 
       /** The open tournament moved into the library. */
       const stashed = (): Record<string, LibraryEntry> => {
-        const { tournament, actual, picks, library } = get()
-        return { ...library, [tournament.id]: { tournament, actual, picks, updatedAt: Date.now() } }
+        const { tournament, actual, picks, pickem, library } = get()
+        return { ...library, [tournament.id]: { tournament, actual, picks, pickem, updatedAt: Date.now() } }
       }
       const takenNames = () => [get().tournament, ...Object.values(get().library).map((e) => e.tournament)].map((t) => t.name)
 
@@ -102,14 +109,14 @@ export const useTournamentStore = create<TournamentStore>()(
         if (!entry) return
         const rest = { ...library }
         delete rest[id]
-        set({ tournament: entry.tournament, actual: entry.actual, picks: entry.picks, library: rest })
+        set({ tournament: entry.tournament, actual: entry.actual, picks: entry.picks, pickem: entry.pickem ?? {}, library: rest })
       }
 
-      const createTournament = (tournament: Tournament, layers: ResultLayers = emptyLayers()) => {
+      const createTournament = (tournament: Tournament, layers: ResultLayers = emptyLayers(), pickem: TournamentPickem = {}) => {
         const library = stashed()
         const id = library[tournament.id] ? `${tournament.id}-${Date.now().toString(36)}` : tournament.id
         const name = uniqueName(tournament.name, takenNames())
-        set({ tournament: { ...tournament, id, name }, actual: layers.actual, picks: layers.picks, library })
+        set({ tournament: { ...tournament, id, name }, actual: layers.actual, picks: layers.picks, pickem, library })
       }
 
       return {
@@ -119,6 +126,7 @@ export const useTournamentStore = create<TournamentStore>()(
         library: {},
         editSource: 'pick',
         simulation: { chaos: 0, detail: 'games' },
+        pickem: {},
 
         openTournament: (id) => {
           if (id !== get().tournament.id) open(id, stashed())
@@ -128,7 +136,8 @@ export const useTournamentStore = create<TournamentStore>()(
           const source = id === get().tournament.id ? get() : get().library[id]
           if (!source) return
           const layers = designOnly ? emptyLayers() : structuredClone({ actual: source.actual, picks: source.picks })
-          createTournament({ ...structuredClone(source.tournament), id: `${id}-copy` }, layers)
+          const pickem = designOnly ? {} : structuredClone(source.pickem ?? {})
+          createTournament({ ...structuredClone(source.tournament), id: `${id}-copy` }, layers, pickem)
         },
         deleteTournament: (id) => {
           const { tournament, library } = get()
@@ -140,7 +149,7 @@ export const useTournamentStore = create<TournamentStore>()(
           }
           const next = Object.values(library).sort((a, b) => b.updatedAt - a.updatedAt)[0]
           if (next) open(next.tournament.id, library)
-          else set({ tournament: blankTournament(), ...emptyLayers() })
+          else set({ tournament: blankTournament(), ...emptyLayers(), pickem: {} })
         },
         updateTournament: (update) => set(({ tournament }) => ({ tournament: update(tournament) })),
         setEditSource: (editSource) => set({ editSource }),
@@ -169,16 +178,25 @@ export const useTournamentStore = create<TournamentStore>()(
           }),
         clearSimulated: () => set(({ picks }) => ({ picks: clearSimulated(picks) })),
         clearResults: () => set({ [layer()]: {} }),
+
+        setPickemCard: (stageId, card) =>
+          set(({ pickem }) => {
+            const next = { ...pickem }
+            if (card) next[stageId] = card
+            else delete next[stageId]
+            return { pickem: next }
+          }),
       }
     },
     {
       name: 'pickem-tournament',
       version: 3,
       migrate: migrateStore,
-      partialize: ({ tournament, actual, picks, library, editSource, simulation }) => ({
+      partialize: ({ tournament, actual, picks, pickem, library, editSource, simulation }) => ({
         tournament,
         actual,
         picks,
+        pickem,
         library,
         editSource,
         simulation,

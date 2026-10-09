@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { MatchId, StageId } from '../types'
 
-export type View = 'stages' | 'odds' | 'teams' | 'design'
+export type View = 'stages' | 'odds' | 'pickem' | 'teams' | 'design'
 
 /** Whether match cards show each team's chance to win; a per-browser preference, so storage may be unavailable. */
 const MATCH_ODDS_KEY = 'pickem-match-odds'

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { MatchEditor } from './components/common/MatchEditor'
 import { StageView } from './components/common/StageView'
 import { TeamsPanel } from './components/common/TeamsPanel'
+import { PickemPanel } from './components/pickem/PickemPanel'
 import { OddsPanel } from './components/simulator/OddsPanel'
 import { SimulatorBar } from './components/simulator/SimulatorBar'
 import { DesignPanel } from './components/design/DesignPanel'
@@ -10,7 +11,7 @@ import { useTournamentState, useTournamentStore } from './store/tournament'
 import { useUiStore, type View } from './store/ui'
 
 const STATUS_LABEL = { waiting: 'Waiting', 'in-progress': 'In progress', complete: 'Done', invalid: 'Invalid' }
-const VIEW_LABEL: Record<View, string> = { stages: 'Bracket', odds: 'Odds', teams: 'Teams', design: 'Design' }
+const VIEW_LABEL: Record<View, string> = { stages: 'Bracket', odds: 'Odds', pickem: "Pick'em", teams: 'Teams', design: 'Design' }
 
 export default function App() {
   const tournament = useTournamentStore((s) => s.tournament)
@@ -103,6 +104,7 @@ export default function App() {
         </>
       )}
       {view === 'odds' && <OddsPanel />}
+      {view === 'pickem' && <PickemPanel />}
       {view === 'teams' && <TeamsPanel />}
       {/* Keyed so expanded stage cards reset when another tournament opens. */}
       {view === 'design' && <DesignPanel key={tournament.id} />}

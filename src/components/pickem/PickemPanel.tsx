@@ -2,6 +2,10 @@ import { useMemo } from 'react'
 import {
   bracketAsPicked,
   bracketCardFromResults,
+  cardOdds,
+  favouriteBracketCard,
+  favouriteSwissCard,
+  pickKey,
   bracketPickStatus,
   cardEditable,
   categoryLabels,
@@ -21,7 +25,9 @@ import {
   swissCardFromResults,
   swissPickCounts,
   swissPickStatus,
+  type CardOdds,
   type ComputedStage,
+  type OutcomeSamples,
   type PickemScore,
   type PickStatus,
   type SwissPickCategory,
@@ -29,6 +35,7 @@ import {
 import { useTournamentStore } from '../../store/tournament'
 import type { BracketPickemCard, Match, PickemCard, Stage, SwissConfig, SwissPickemCard, TeamId } from '../../types'
 import { TeamBadge } from '../common/TeamBadge'
+import { formatChance, SAMPLE_TOTAL, useOutcomeSampler } from '../common/useOutcomeSampler'
 
 const STATUS_MARK: Record<PickStatus, string> = { correct: '✓', wrong: '✗', pending: '…' }
 const STATUS_TITLE: Record<PickStatus, string> = { correct: 'Correct', wrong: 'Wrong', pending: 'Still open' }
@@ -44,6 +51,8 @@ export function PickemPanel() {
   const pickem = useTournamentStore((s) => s.pickem)
   const setCard = useTournamentStore((s) => s.setPickemCard)
   const actualState = useMemo(() => computeTournament(tournament, actual), [tournament, actual])
+  const sampler = useOutcomeSampler()
+  const samples = sampler.stale ? null : sampler.samples
   // Only for "Fill from my picks", so it's worked out on demand.
   const pickedStage = (stageId: string) => computeTournament(tournament, picksView(tournament, { actual, picks })).stages[stageId]
 
@@ -63,6 +72,16 @@ export function PickemPanel() {
         Fill in a card for each stage before it starts, as in Valve&apos;s Major Pick&apos;em. Cards are scored against actual
         results only, and are kept apart from your picks. A card locks once its stage has an actual result.
       </p>
+      <div className="toolbar">
+        <button className="button" onClick={sampler.run} disabled={sampler.running}>
+          {sampler.running ? `Simulating… ${sampler.done}/${SAMPLE_TOTAL}` : 'Check odds'}
+        </button>
+        <span className="hint">
+          How likely each card is, from {SAMPLE_TOTAL.toLocaleString()} simulations of the rest of the event from actual results, next to
+          a card of only favourites.
+        </span>
+        {sampler.stale && !sampler.running && <span className="badge badge--stale">Out of date</span>}
+      </div>
       {scores.length > 0 && (
         <p className="pickem__total">
           <strong>{correct}</strong> correct so far · {passed} of {scores.length} {scores.length === 1 ? 'card' : 'cards'} passed
@@ -86,6 +105,7 @@ export function PickemPanel() {
                 card={card?.kind === 'swiss' ? card : emptySwissCard()}
                 onChange={(next) => setCard(stage.id, next)}
                 fill={() => pickedStage(stage.id)}
+                samples={samples}
               />
             ) : (
               <BracketCard
@@ -95,6 +115,7 @@ export function PickemPanel() {
                 card={card?.kind === 'bracket' ? card : emptyBracketCard()}
                 onChange={(next) => setCard(stage.id, next)}
                 fill={() => pickedStage(stage.id)}
+                samples={samples}
               />
             )}
           </section>
@@ -181,6 +202,7 @@ function SwissCard({
   card,
   onChange,
   fill,
+  samples,
 }: {
   stage: Stage
   config: SwissConfig
@@ -188,6 +210,7 @@ function SwissCard({
   card: SwissPickemCard
   onChange: (card: SwissPickemCard) => void
   fill: () => ComputedStage | undefined
+  samples: OutcomeSamples | null
 }) {
   const teams = useTournamentStore((s) => s.tournament.teams)
   const seeds = computed.seeds ?? []
@@ -197,6 +220,14 @@ function SwissCard({
   const score = scoreSwissCard(card, config, computed, seeds.length)
   const editable = cardEditable(card, computed)
   const started = stageStarted(computed)
+  const odds = useMemo(() => (samples ? cardOdds(stage, card, samples, score.needed) : null), [samples, stage, card, score.needed])
+  const favourites = useMemo(() => {
+    if (!samples) return null
+    const favouriteCard = favouriteSwissCard(stage, seeds, counts, samples)
+    return cardOdds(stage, favouriteCard, samples, score.needed)
+    // counts and seeds follow the stage and computed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [samples, stage, computed, score.needed])
 
   const set = (teamId: TeamId, category: SwissPickCategory) =>
     onChange(pickSwiss(card, teamId, categoryOf(card, teamId) === category ? null : category, counts))
@@ -218,6 +249,18 @@ function SwissCard({
         onFill={fillFromPicks}
         onClear={() => onChange({ ...emptySwissCard(), unlocked: card.unlocked })}
       />
+      {odds && favourites && (
+        <OddsLine
+          odds={odds}
+          favourites={favourites}
+          picked={score.total}
+          full={full}
+          groups={SWISS_PICK_CATEGORIES.filter((c) => card[c].length).map((c) => ({
+            label: card[c].length === 1 ? `${labels[c]} pick right` : `${card[c].length === 2 ? 'both' : `all ${card[c].length}`} ${c === 'advance' ? 'Advance' : labels[c]} picks right`,
+            chance: odds.groups?.[c] ?? 0,
+          }))}
+        />
+      )}
       <div className="table-wrap">
         <table className="odds__table pickem__table">
           <thead>
@@ -230,6 +273,7 @@ function SwissCard({
                   {SWISS_PICK_CATEGORIES.map((c) => `${labels[c]}: ${card[c].length}/${counts[c]}`).join(' · ')}
                 </span>
               </th>
+              {odds && <th>Chance</th>}
               {started && <th>Record</th>}
               {started && <th />}
             </tr>
@@ -263,6 +307,7 @@ function SwissCard({
                       ))}
                     </div>
                   </td>
+                  {odds && <td>{category ? formatChance(odds.picks[pickKey(card, id)] ?? 0) : ''}</td>}
                   {started && (
                     <td className="muted">
                       {record?.wins ?? 0}-{record?.losses ?? 0}
@@ -288,6 +333,7 @@ function BracketCard({
   card,
   onChange,
   fill,
+  samples,
 }: {
   stage: Stage
   computed: ComputedStage
@@ -295,6 +341,7 @@ function BracketCard({
   card: BracketPickemCard
   onChange: (card: BracketPickemCard) => void
   fill: () => ComputedStage | undefined
+  samples: OutcomeSamples | null
 }) {
   const tournament = useTournamentStore((s) => s.tournament)
   const picked = useMemo(() => bracketAsPicked(tournament, stage, earlier, card), [tournament, stage, earlier, card])
@@ -303,6 +350,11 @@ function BracketCard({
   const score = scoreBracketCard(card, computed, full)
   const editable = cardEditable(card, computed)
   const started = stageStarted(computed)
+  const odds = useMemo(() => (samples ? cardOdds(stage, card, samples, score.needed) : null), [samples, stage, card, score.needed])
+  const favourites = useMemo(
+    () => (samples ? cardOdds(stage, favouriteBracketCard(tournament, stage, earlier, samples), samples, score.needed) : null),
+    [samples, tournament, stage, earlier, score.needed],
+  )
 
   // Keeps only winners that still play their match once the change ripples through.
   const save = (next: BracketPickemCard) => onChange(cleanBracketCard(next, bracketAsPicked(tournament, stage, earlier, next)))
@@ -339,6 +391,15 @@ function BracketCard({
         onFill={fillFromPicks}
         onClear={() => onChange({ ...emptyBracketCard(), unlocked: card.unlocked })}
       />
+      {odds && favourites && (
+        <OddsLine
+          odds={odds}
+          favourites={favourites}
+          picked={score.total}
+          full={full}
+          groups={score.total > 1 ? [{ label: `all ${score.total} picks right`, chance: allRight(samples!, stage.id, card) }] : []}
+        />
+      )}
       <div className="pickem__bracket">
         {columns.map((column) => (
           <div key={column.key} className="pickem__round">
@@ -360,6 +421,11 @@ function BracketCard({
                       >
                         <TeamBadge team={team} />
                         <span className="pickem__pick-name">{team?.name ?? (slot.teamId ? slot.teamId : 'TBD')}</span>
+                        {odds && winner && winner === slot.teamId && (
+                          <span className="pickem__chance muted" title="Chance this pick comes true">
+                            {formatChance(odds.picks[pickKey(card, m.id)] ?? 0)}
+                          </span>
+                        )}
                         {status && winner === slot.teamId && (
                           <span className={`pickem__mark is-${status}`} title={STATUS_TITLE[status]}>
                             {STATUS_MARK[status]}
@@ -375,5 +441,50 @@ function BracketCard({
         ))}
       </div>
     </>
+  )
+}
+
+/** Chance every pick on a bracket card comes true. */
+function allRight(samples: OutcomeSamples, stageId: string, card: BracketPickemCard): number {
+  const winners = Object.entries(card.winners)
+  if (!samples.length) return 0
+  return samples.filter((sample) => winners.every(([matchId, team]) => sample[stageId]?.winners[matchId] === team)).length / samples.length
+}
+
+/** How likely a card is, next to a card of only favourites. */
+function OddsLine({
+  odds,
+  favourites,
+  picked,
+  full,
+  groups,
+}: {
+  odds: CardOdds
+  favourites: CardOdds
+  picked: number
+  full: number
+  groups: { label: string; chance: number }[]
+}) {
+  return (
+    <p className="pickem__odds">
+      {picked > 0 ? (
+        <>
+          <strong>{formatChance(odds.pass)}</strong> to pass · {odds.expected.toFixed(1)} correct expected
+          {groups.map((g) => (
+            <span key={g.label}>
+              {' '}
+              · {g.label}: {formatChance(g.chance)}
+            </span>
+          ))}
+        </>
+      ) : (
+        'No picks yet.'
+      )}
+      <span className="muted">
+        {' '}
+        — a card of only favourites: {formatChance(favourites.pass)} to pass, {favourites.expected.toFixed(1)} correct expected
+        {picked < full ? ` (it fills all ${full} picks)` : ''}
+      </span>
+    </p>
   )
 }

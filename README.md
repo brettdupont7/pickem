@@ -68,10 +68,13 @@ Teams in the presets are placeholders. To rename them all at once, paste a list 
 - **Odds:** runs 2,000 simulations of the rest of the event. For each team it shows the chance of advancing from each stage, and of winning the last one. Click a column header to sort by it (again to reverse, a third time for the default order, by chance of winning the event); teams that can't reach a stage stay at the bottom. It uses whichever view is selected: under **Picks**, your picks and actual results are kept fixed; under **Actual results**, only actual results are, so the odds show the real-world outlook. Team strength comes from the Teams tab ratings, adjusted for form when **Form** is on in Game rules.
 
   Below the table, **Matches that matter** lists every match that can be played right now, biggest swing first. For each team it shows the chance to win the match, the chance to advance from the stage (or win it, for the last stage) if they win and if they lose, and the gap in percentage points. These come from the same simulations, split by who won the match, so they get noisier for a big favourite's rare losses.
+
+  In the **Picks** view, **How likely are your picks?** (**Check my picks**) simulates the rest of the event 2,000 times from actual results only and, for each stage not yet decided, shows the chance that all the teams your picks send through (or the team you picked to win the last stage) actually get there. Next to it is the same number of favourites (the teams likeliest to get through on their own) and their chance, so you can tell a bold set of picks from a chalky one. Every team has to make it, so these chances are small for big stages.
 - **Pick'em:** a Pick'em challenge card for each stage, as in Valve's Major Pick'em, kept apart from your picks and scored against actual results only.
   - **Swiss stages:** pick teams to go undefeated, to advance with a loss, and to go winless (for a 16-team stage with 3 wins to advance and 3 losses out: two 3-0, six 3-1 / 3-2 and two 0-3). A pick only counts for that exact outcome, so a 3-0 pick that finishes 3-1 is wrong. The number of picks in each group follows the stage's size and win/loss targets.
   - **Elimination stages:** pick the winner of each match; later rounds fill in from your earlier picks, and changing a pick drops the later picks that no longer fit.
   - Each card shows how many picks are correct, wrong and still open, and passes with half a full card correct (5 of 10 for a Major Swiss stage). A card opens once its teams are known from actual results and locks once its stage has an actual result; **Unlock** allows changes anyway. **Fill from my picks** fills a card from where your picks and simulations have each team finishing.
+  - **Check odds** simulates the rest of the event 2,000 times from actual results and shows each pick's chance, each card's chance to pass and expected number correct, and the chance every pick in a group comes true (e.g. all six Advance picks). Each card is compared with a card of only favourites, filled with the likeliest outcome for each slot.
 - **Teams:** at the top, **VRS rankings** brings in Valve's Regional Standings for CS2:
   - **Download / Refresh** fetches the latest global standings from [Valve's repository](https://github.com/ValveSoftware/counter-strike_regional_standings) and keeps them in the browser, apart from your tournaments.
   - **Add from VRS…** lists the top 150 (search covers every team and player); tick teams to add them with their VRS points as their rating.
@@ -171,6 +174,7 @@ src/
     catalog.ts      Ranking catalogs: VRS parsing, linking teams, updating ratings, seeding by rank
     form.ts         Ratings updated by a tournament's actual results
     pickem.ts       Pick'em cards: sizes, scoring, and filling a card from picks
+    pickOdds.ts     How likely picks and Pick'em cards are, from simulated outcomes
     io.ts           Tournament files (export/import)
   data/presets/ CS2 Major, Groups + Playoffs, NFL Playoffs and shared rule sets
   data/vrs.ts   Downloads the latest VRS standings from Valve's GitHub repository

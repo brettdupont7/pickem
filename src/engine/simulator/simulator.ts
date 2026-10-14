@@ -221,9 +221,15 @@ export interface MonteCarloResult {
  * Runs the rest of the tournament many times from the current results.
  * Picks and actual results are kept fixed, so the odds are conditional on
  * them. Call `run` in chunks (e.g. per animation frame) to keep the UI
- * responsive, and read `result()` whenever.
+ * responsive, and read `result()` whenever. `observe`, if given, sees every
+ * simulated tournament once all its stages are played.
  */
-export function createMonteCarlo(tournament: Tournament, results: TournamentResults, options: SimulationOptions = {}) {
+export function createMonteCarlo(
+  tournament: Tournament,
+  results: TournamentResults,
+  options: SimulationOptions = {},
+  observe?: (stages: Record<StageId, ComputedStage>) => void,
+) {
   const { simulateMatch } = createSimulator(tournament, { ...options, detail: 'winner' })
   const rng = createRng(options.seed ?? 0)
   const stages = playOrder(tournament.stages)
@@ -294,6 +300,7 @@ export function createMonteCarlo(tournament: Tournament, results: TournamentResu
       })
       if (stage.id === lastStageId) bump(champions, state.ranking[0])
     }
+    observe?.(computed)
     iterations++
   }
 

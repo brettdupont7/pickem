@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { createMonteCarlo, playOrder, simulationRatings, type MatchOdds, type MonteCarloResult } from '../../engine'
-import { useTournamentStore, useViewResults } from '../../store/tournament'
+import { computeTournament, createMonteCarlo, pickedSetOdds, playOrder, simulationRatings, type MatchOdds, type MonteCarloResult } from '../../engine'
+import { useTournamentState, useTournamentStore, useViewResults } from '../../store/tournament'
+import { formatChance, SAMPLE_TOTAL, useOutcomeSampler } from '../common/useOutcomeSampler'
 import type { StageId, Tournament } from '../../types'
 
 const TOTAL = 2000
@@ -170,7 +171,82 @@ export function OddsPanel() {
         </div>
       )}
       {odds && odds.matches.length > 0 && <MatchesThatMatter odds={odds} advanceChance={advanceChance} advancing={advancing} />}
+      {view === 'pick' && <PicksCheck />}
     </div>
+  )
+}
+
+/**
+ * How likely the picks are to come true, simulated from actual results
+ * only, next to picking the favourites: e.g. the chance that all 8 teams
+ * picked to advance from a stage do.
+ */
+function PicksCheck() {
+  const tournament = useTournamentStore((s) => s.tournament)
+  const actual = useTournamentStore((s) => s.actual)
+  const picked = useTournamentState()
+  const actualState = useMemo(() => computeTournament(tournament, actual), [tournament, actual])
+  const sampler = useOutcomeSampler()
+  const rows = useMemo(
+    () => (sampler.samples ? pickedSetOdds(tournament, picked.stages, actualState.stages, sampler.samples) : null),
+    [sampler.samples, tournament, picked, actualState],
+  )
+  const name = (id: string) => tournament.teams[id]?.name ?? id
+  const stageName = (id: StageId) => tournament.stages.find((s) => s.id === id)?.name ?? id
+
+  return (
+    <section className="swings">
+      <h3>How likely are your picks?</h3>
+      <div className="toolbar">
+        <button className="button" onClick={sampler.run} disabled={sampler.running}>
+          {sampler.running ? `Simulating… ${sampler.done}/${SAMPLE_TOTAL}` : 'Check my picks'}
+        </button>
+        <span className="hint">
+          Simulates the rest of the event {SAMPLE_TOTAL.toLocaleString()} times from actual results only, and counts how often the
+          teams your picks send through (or crown) all get there, next to the same number of favourites.
+        </span>
+        {sampler.stale && !sampler.running && <span className="badge badge--stale">Out of date</span>}
+      </div>
+      {rows && rows.length === 0 && <p className="hint">No stage still to be decided has picks that send teams through yet.</p>}
+      {rows && rows.length > 0 && (
+        <div className="table-wrap">
+          <table className="odds__table">
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Your picks</th>
+                <th>All right</th>
+                <th>Favourites</th>
+                <th>All right</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const shared = r.picked.filter((id) => r.favourites.includes(id)).length
+                const what = r.kind === 'win' ? 'to win' : `to advance`
+                return (
+                  <tr key={r.stageId}>
+                    <td>
+                      {stageName(r.stageId)}
+                      <span className="muted odds__what">
+                        {r.picked.length} {what}
+                        {r.picked.length > 1 ? ` · ${shared} of ${r.picked.length} are favourites` : ''}
+                      </span>
+                    </td>
+                    <td className="picks-check__teams">{r.picked.map(name).join(', ')}</td>
+                    <td>
+                      <strong>{formatChance(r.chance)}</strong>
+                    </td>
+                    <td className="picks-check__teams muted">{r.favourites.map(name).join(', ')}</td>
+                    <td>{formatChance(r.favouritesChance)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 

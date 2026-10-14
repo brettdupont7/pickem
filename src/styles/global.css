@@ -1659,3 +1659,19 @@ input[type='number'] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.pickem__odds {
+  margin: 0 0 8px;
+}
+
+.pickem__chance {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Team lists in the picks check wrap instead of widening the table. */
+.odds__table td.picks-check__teams {
+  white-space: normal;
+  min-width: 180px;
+  max-width: 320px;
+}

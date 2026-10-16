@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { HLTV_BOOKMARKLET_HREF, HLTV_VRS_URL } from '../../data/hltv'
 import { addFromCatalog, linkTeam, matchTeams, normalizeTeamName, updateRatings, VRS_CALIBRATION } from '../../engine'
 import { useCatalogStore } from '../../store/catalog'
 import { useTournamentStore } from '../../store/tournament'
@@ -10,13 +11,14 @@ const TOP = 150
 export const formatAsOf = (asOf: string) =>
   asOf ? new Date(`${asOf}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'unknown date'
 
-type Mode = 'add' | 'link' | null
+type Mode = 'add' | 'link' | 'hltv' | null
 
-/** CS2 rankings in the Teams tab: download VRS, add teams from it, link teams to it and update their ratings. */
+/** CS2 rankings in the Teams tab: download VRS (or import it from HLTV), add teams from it, link teams to it and update their ratings. */
 export function VrsPanel() {
   const vrs = useCatalogStore((s) => s.vrs)
   const refreshing = useCatalogStore((s) => s.refreshing)
   const error = useCatalogStore((s) => s.error)
+  const notice = useCatalogStore((s) => s.notice)
   const refreshVrs = useCatalogStore((s) => s.refreshVrs)
   const tournament = useTournamentStore((s) => s.tournament)
   const update = useTournamentStore((s) => s.updateTournament)
@@ -51,6 +53,13 @@ export function VrsPanel() {
         <button className="button button--ghost" onClick={() => void refreshVrs()} disabled={refreshing}>
           {refreshing ? 'Downloading…' : vrs ? 'Refresh' : 'Download'}
         </button>
+        <button
+          className="button button--ghost"
+          onClick={() => setMode(mode === 'hltv' ? null : 'hltv')}
+          title="HLTV republishes Valve's standings daily; Valve's own files come about monthly"
+        >
+          Import from HLTV…
+        </button>
         {vrs && (
           <>
             <button className="button" onClick={() => setMode(mode === 'add' ? null : 'add')}>
@@ -68,6 +77,7 @@ export function VrsPanel() {
         )}
       </div>
       {error && <p className="error">{error}</p>}
+      {notice && <p className="hint">{notice}</p>}
       {message && <p className="hint">{message}</p>}
       {linked.length > 0 && !calibrated && (
         <p className="hint">
@@ -79,9 +89,82 @@ export function VrsPanel() {
           (sets Ratings predict to a best-of-3 and the upset floor to 10% in Game rules)
         </p>
       )}
+      {mode === 'hltv' && <HltvImport onClose={() => setMode(null)} onDone={setMessage} />}
       {vrs && mode === 'add' && <VrsPicker vrs={vrs} onClose={() => setMode(null)} onDone={setMessage} />}
       {vrs && mode === 'link' && <VrsLinker vrs={vrs} onClose={() => setMode(null)} onDone={setMessage} />}
     </section>
+  )
+}
+
+/**
+ * Import standings from HLTV, which updates them daily. HLTV doesn't allow
+ * the app to download them, so a bookmarklet copies them from HLTV's page in
+ * the viewer's browser and they're pasted here.
+ */
+function HltvImport({ onClose, onDone }: { onClose: () => void; onDone: (message: string) => void }) {
+  const importVrs = useCatalogStore((s) => s.importVrs)
+  const bookmarklet = useRef<HTMLAnchorElement>(null)
+  const canRead = typeof navigator !== 'undefined' && !!navigator.clipboard?.readText
+
+  // Set directly: React warns about javascript: URLs in href.
+  useEffect(() => {
+    bookmarklet.current?.setAttribute('href', HLTV_BOOKMARKLET_HREF)
+  }, [])
+
+  const accept = (text: string) => {
+    const vrs = importVrs(text.trim())
+    if (!vrs) return
+    onDone(`Imported ${vrs.entries.length} teams from HLTV as of ${formatAsOf(vrs.asOf)}.`)
+    onClose()
+  }
+
+  const readClipboard = async () => {
+    try {
+      accept(await navigator.clipboard.readText())
+    } catch {
+      onDone("Couldn't read the clipboard. Paste into the box instead.")
+    }
+  }
+
+  return (
+    <div className="vrs__panel">
+      <ol className="vrs__steps">
+        <li>
+          Drag this link to your bookmarks bar:{' '}
+          <a ref={bookmarklet} className="vrs__bookmarklet" onClick={(e) => e.preventDefault()} title="Drag me to your bookmarks bar">
+            Copy VRS from HLTV
+          </a>
+        </li>
+        <li>
+          Open{' '}
+          <a href={HLTV_VRS_URL} target="_blank" rel="noreferrer">
+            HLTV's Valve ranking
+          </a>{' '}
+          and click the bookmark. It copies the standings shown there.
+        </li>
+        <li>Come back and paste them here.</li>
+      </ol>
+      <textarea
+        className="vrs__paste"
+        placeholder="Paste here"
+        aria-label="Standings copied from HLTV"
+        onPaste={(e) => {
+          e.preventDefault()
+          accept(e.clipboardData.getData('text'))
+        }}
+      />
+      <div className="row">
+        {canRead && (
+          <button className="button" onClick={() => void readClipboard()}>
+            Paste from clipboard
+          </button>
+        )}
+        <button className="button button--ghost" onClick={onClose}>
+          Cancel
+        </button>
+        <span className="hint">Linked teams keep their ratings until you choose to update them.</span>
+      </div>
+    </div>
   )
 }
 

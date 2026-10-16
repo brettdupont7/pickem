@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { parseHltvImport } from '../data/hltv'
 import { fetchLatestVrs } from '../data/vrs'
 import type { Catalog } from '../types'
 
@@ -8,12 +9,16 @@ import type { Catalog } from '../types'
  * refreshing rankings can never touch tournament data.
  */
 interface CatalogStore {
-  /** The latest VRS snapshot downloaded, if any. */
+  /** The latest VRS snapshot downloaded or imported, if any. */
   vrs: Catalog | null
   refreshing: boolean
   error: string | null
-  /** Downloads the latest snapshot. Never changes tournaments. */
+  /** Set when a download didn't replace a newer snapshot. */
+  notice: string | null
+  /** Downloads the latest snapshot from Valve, unless the one already here is newer. Never changes tournaments. */
   refreshVrs: () => Promise<void>
+  /** Imports standings copied from HLTV. Returns the snapshot, or null (with `error` set) if the text isn't standings. */
+  importVrs: (text: string) => Catalog | null
 }
 
 export const useCatalogStore = create<CatalogStore>()(
@@ -22,13 +27,31 @@ export const useCatalogStore = create<CatalogStore>()(
       vrs: null,
       refreshing: false,
       error: null,
+      notice: null,
       refreshVrs: async () => {
         if (get().refreshing) return
-        set({ refreshing: true, error: null })
+        set({ refreshing: true, error: null, notice: null })
         try {
-          set({ vrs: await fetchLatestVrs(), refreshing: false })
+          const latest = await fetchLatestVrs()
+          const current = get().vrs
+          if (current && current.asOf > latest.asOf) {
+            set({
+              refreshing: false,
+              notice: "Valve's latest file is older than the standings you have, so they were kept.",
+            })
+          } else set({ vrs: latest, refreshing: false })
         } catch (e) {
           set({ refreshing: false, error: (e as Error).message })
+        }
+      },
+      importVrs: (text) => {
+        try {
+          const vrs = parseHltvImport(text)
+          set({ vrs, error: null, notice: null })
+          return vrs
+        } catch (e) {
+          set({ error: (e as Error).message })
+          return null
         }
       },
     }),

@@ -77,9 +77,10 @@ Teams in the presets are placeholders. To rename them all at once, paste a list 
   - **Check odds** simulates the rest of the event 2,000 times from actual results and shows each pick's chance, each card's chance to pass and expected number correct, and the chance every pick in a group comes true (e.g. all six Advance picks). Each card is compared with a card of only favourites, filled with the likeliest outcome for each slot.
 - **Teams:** at the top, **VRS rankings** brings in Valve's Regional Standings for CS2:
   - **Download / Refresh** fetches the latest global standings from [Valve's repository](https://github.com/ValveSoftware/counter-strike_regional_standings) and keeps them in the browser, apart from your tournaments.
+  - **Import from HLTV…** brings in standings from [HLTV's Valve ranking](https://www.hltv.org/valve-ranking/teams), which republishes Valve's standings daily (Valve's own files come about monthly). HLTV doesn't let the app download them, so the panel has a **Copy VRS from HLTV** bookmarklet: drag it to your bookmarks bar, click it on HLTV's Valve ranking page to copy the standings shown there, and paste them into the panel. Team names match Valve's, so linked teams stay linked. **Refresh** won't replace imported standings with an older Valve file.
   - **Add from VRS…** lists the top 150 (search covers every team and player); tick teams to add them with their VRS points as their rating.
   - **Link teams to VRS…** matches the tournament's teams to VRS by name (ignoring case, punctuation, words like "Team" and short names like NAVI), lets you correct any match, then sets their ratings to VRS points.
-  - **Update ratings to …** appears when a newer snapshot is downloaded; ratings never change on their own, so an event in progress keeps the ratings it started with.
+  - **Update ratings to …** appears when a newer snapshot is downloaded or imported; ratings never change on their own, so an event in progress keeps the ratings it started with.
   - The **Source** column shows where each rating came from, e.g. "VRS #3 · Oct 5, 2026". Typing a rating by hand makes it manual again.
 
   - Once teams are linked, **Use VRS calibration** appears if the tournament's odds aren't set up for VRS points yet (see **Ratings predict** and **Upset floor** under Game rules).
@@ -178,6 +179,7 @@ src/
     io.ts           Tournament files (export/import)
   data/presets/ CS2 Major, Groups + Playoffs, NFL Playoffs and shared rule sets
   data/vrs.ts   Downloads the latest VRS standings from Valve's GitHub repository
+  data/hltv.ts  Bookmarklet that copies VRS standings from HLTV, and parsing what it copies
   store/        Zustand stores (open tournament, picks and results, Pick'em cards, library, VRS rankings, UI state)
   components/   React UI (Swiss web, brackets, match cards, editor, odds, Pick'em, teams and VRS, designer)
 ```

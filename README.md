@@ -77,7 +77,7 @@ Teams in the presets are placeholders. To rename them all at once, paste a list 
   - **Check odds** simulates the rest of the event 2,000 times from actual results and shows each pick's chance, each card's chance to pass and expected number correct, and the chance every pick in a group comes true (e.g. all six Advance picks). Each card is compared with a card of only favourites, filled with the likeliest outcome for each slot.
 - **Teams:** at the top, **VRS rankings** brings in Valve's Regional Standings for CS2:
   - **Download / Refresh** fetches the latest global standings from [Valve's repository](https://github.com/ValveSoftware/counter-strike_regional_standings) and keeps them in the browser, apart from your tournaments.
-  - **Import from HLTV…** brings in standings from [HLTV's Valve ranking](https://www.hltv.org/valve-ranking/teams), which republishes Valve's standings daily (Valve's own files come about monthly). HLTV doesn't let the app download them, so the panel has a **Copy VRS from HLTV** bookmarklet: drag it to your bookmarks bar, click it on HLTV's Valve ranking page to copy the standings shown there, and paste them into the panel. Team names match Valve's, so linked teams stay linked. **Refresh** won't replace imported standings with an older Valve file.
+  - **Import from HLTV…** brings in standings from [HLTV's Valve ranking](https://www.hltv.org/valve-ranking/teams), which republishes Valve's standings daily (Valve's own files come about monthly). HLTV doesn't let the app download them, so the panel has a **Copy from HLTV** bookmarklet: drag it to your bookmarks bar, click it on HLTV's Valve ranking page to copy the standings shown there, and paste them into the panel. Team names match Valve's, so linked teams stay linked. **Refresh** won't replace imported standings with an older Valve file. The same bookmark copies whole events too (see **Tournaments from HLTV** below).
   - **Add from VRS…** lists the top 150 (search covers every team and player); tick teams to add them with their VRS points as their rating.
   - **Link teams to VRS…** matches the tournament's teams to VRS by name (ignoring case, punctuation, words like "Team" and short names like NAVI), lets you correct any match, then sets their ratings to VRS points.
   - **Update ratings to …** appears when a newer snapshot is downloaded or imported; ratings never change on their own, so an event in progress keeps the ratings it started with.
@@ -134,6 +134,15 @@ The **Design** tab edits the open tournament. Changes apply straight away, and t
   - **Show preview** draws the stage as it would start. Teams from earlier stages appear as placeholders like "3rd in Stage 1".
 - Problems such as a team entered twice, a place that doesn't exist or an even best-of are listed on the stage they belong to. The tournament badge says **Ready to play** when there are none.
 
+### Tournaments from HLTV
+
+**Import from HLTV…** (in the Tournaments list, or the Teams tab's VRS bar) builds a tournament from an event on HLTV. Click the **Copy from HLTV** bookmark on the event's page (any of its stages, or its page in HLTV's VRS invites) and paste. The bookmark reads that page and the stages HLTV groups with it (a CS2 Major's Stage 1, Stage 2 and Stage 3 & Playoffs pages), plus the day's Valve ranking. It only reads pages, as clicking through them would.
+
+- **What comes from HLTV:** the stages and their order, Swiss win/loss limits and best-ofs (e.g. Bo1 with Bo3 to advance or eliminate), GSL groups (4-team double elimination, no grand final) and how they were drawn, playoff size, round names, best-ofs (e.g. a Bo5 grand final) and the 3rd-place match, and which stage places feed the next stage.
+- **Teams:** before invites are sent, HLTV shows its predicted teams (from its simulation of the invite race); the preview says how many are predictions and which are least likely, and copying the event again later updates them. Invited teams are seeded by VRS rank and rated with current VRS points. Slots HLTV has no team for become "TBD" placeholders.
+- **What doesn't:** HLTV doesn't list Swiss pairing rules or tiebreakers, so those follow Valve's Major rules (the preview says so for events that aren't Majors). Formats other than Swiss, GSL groups and single-elimination playoffs aren't supported yet; the preview says which part it can't build.
+- **Create tournament** opens it as a new tournament. **Update <tournament>'s teams** keeps the open tournament's stages and rules and puts the event's teams into its invited slots, stage by stage (each slot keeps its team ID, so picks stay with the slot); the stages must invite the same numbers of teams.
+
 ### Tournament files
 
 **Export** saves a tournament as JSON, with its picks and actual results (kept separately) unless you untick **Include picks and results when exporting**. **Import** loads a file as a new tournament. It accepts an exported file, including ones from before picks and results were separated, or a bare tournament object, and fills in any stage settings that are missing with defaults.
@@ -179,7 +188,9 @@ src/
     io.ts           Tournament files (export/import)
   data/presets/ CS2 Major, Groups + Playoffs, NFL Playoffs and shared rule sets
   data/vrs.ts   Downloads the latest VRS standings from Valve's GitHub repository
-  data/hltv.ts  Bookmarklet that copies VRS standings from HLTV, and parsing what it copies
+  data/hltv.ts  Reads VRS standings copied from HLTV
+  data/hltvBookmarklet.js  The bookmarklet: copies standings or an event from HLTV's pages
+  data/hltvEvent.ts  Builds a tournament (or updates one's teams) from an event copied from HLTV
   store/        Zustand stores (open tournament, picks and results, Pick'em cards, library, VRS rankings, UI state)
   components/   React UI (Swiss web, brackets, match cards, editor, odds, Pick'em, teams and VRS, designer)
 ```

@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { parseHltvImport } from '../data/hltv'
 import { fetchLatestVrs } from '../data/vrs'
 import type { Catalog } from '../types'
 
@@ -17,8 +16,10 @@ interface CatalogStore {
   notice: string | null
   /** Downloads the latest snapshot from Valve, unless the one already here is newer. Never changes tournaments. */
   refreshVrs: () => Promise<void>
-  /** Imports standings copied from HLTV. Returns the snapshot, or null (with `error` set) if the text isn't standings. */
-  importVrs: (text: string) => Catalog | null
+  /** Uses a snapshot imported by hand (e.g. copied from HLTV), even if older. */
+  importVrs: (catalog: Catalog) => void
+  /** Keeps `catalog` if it's at least as new as the snapshot here (e.g. one copied along with an event). Returns the snapshot in use. */
+  offerVrs: (catalog: Catalog) => Catalog
 }
 
 export const useCatalogStore = create<CatalogStore>()(
@@ -44,15 +45,12 @@ export const useCatalogStore = create<CatalogStore>()(
           set({ refreshing: false, error: (e as Error).message })
         }
       },
-      importVrs: (text) => {
-        try {
-          const vrs = parseHltvImport(text)
-          set({ vrs, error: null, notice: null })
-          return vrs
-        } catch (e) {
-          set({ error: (e as Error).message })
-          return null
-        }
+      importVrs: (vrs) => set({ vrs, error: null, notice: null }),
+      offerVrs: (catalog) => {
+        const current = get().vrs
+        if (current && current.asOf > catalog.asOf) return current
+        set({ vrs: catalog })
+        return catalog
       },
     }),
     {

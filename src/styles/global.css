@@ -1195,6 +1195,11 @@ input[type='number'] {
   resize: vertical;
 }
 
+.hltv__stages {
+  margin: 0;
+  padding-left: 20px;
+}
+
 .link-button {
   all: unset;
   color: var(--accent);

@@ -4,6 +4,7 @@ import { blankTournament, instantiate, parseTournamentFile, serializeTournament,
 import { useTournamentStore } from '../../store/tournament'
 import { useUiStore } from '../../store/ui'
 import type { Tournament } from '../../types'
+import { HltvImport } from '../common/HltvImport'
 import { downloadFile } from './fields'
 
 interface Row extends ResultLayers {
@@ -24,6 +25,7 @@ export function LibraryPanel() {
   const closeEditor = useUiStore((s) => s.closeEditor)
   const [withResults, setWithResults] = useState(true)
   const [message, setMessage] = useState<{ kind: 'error' | 'hint'; text: string } | null>(null)
+  const [fromHltv, setFromHltv] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const rows: Row[] = useMemo(
@@ -92,6 +94,9 @@ export function LibraryPanel() {
           <button className="button" onClick={() => fileInput.current?.click()}>
             Import…
           </button>
+          <button className="button" onClick={() => setFromHltv(!fromHltv)} title="Build a tournament from an HLTV event page">
+            Import from HLTV…
+          </button>
           <input
             ref={fileInput}
             type="file"
@@ -105,6 +110,7 @@ export function LibraryPanel() {
           />
         </div>
       </header>
+      {fromHltv && <HltvImport onClose={() => setFromHltv(false)} onDone={(text) => setMessage({ kind: 'hint', text })} />}
       {message && <p className={message.kind}>{message.text}</p>}
       <div className="table-wrap">
         <table className="library__table">

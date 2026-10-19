@@ -2,7 +2,7 @@ import { cs2Rules } from './rules'
 import type { EntrantSource, Stage, StageId, SwissConfig, Team, TeamId, Tournament } from '../../types'
 
 /** CS2 Major Swiss: 3 wins advance, 3 losses eliminate, Bo3 when advancement or elimination is on the line. */
-const majorSwiss: SwissConfig = {
+export const majorSwiss: SwissConfig = {
   format: 'swiss',
   winsToAdvance: 3,
   lossesToEliminate: 3,

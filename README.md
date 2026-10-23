@@ -15,7 +15,7 @@ Requires Node 18+.
 
 ```sh
 npm install
-npm run dev     # start the app at http://localhost:5173
+npm run dev     # start the app at http://localhost:5180
 npm test        # run the engine tests
 npm run build   # type-check and build for production
 ```

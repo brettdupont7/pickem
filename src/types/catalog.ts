@@ -7,6 +7,9 @@ export interface CatalogEntry {
   /** Rating points, on the same scale as a team's `rating`. */
   points: number
   roster?: string[]
+  /** The team's logo, and a version for light themes if it has one. */
+  logoUrl?: string
+  logoUrlLight?: string
 }
 
 /** One snapshot of a ranking. */

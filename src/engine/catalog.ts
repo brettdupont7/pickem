@@ -49,7 +49,7 @@ export function parseVrsStandings(markdown: string, options: { region?: string; 
   const seen = new Set<string>()
   for (const line of markdown.split('\n')) {
     const cells = line.split('|').map((c) => c.trim())
-    // | Standing | Points | Team Name | Roster | details |
+    // | Standing | Points | Team Name | Roster | details | (HLTV copies add | Logo | Light logo |)
     if (cells.length < 5) continue
     const rank = Number(cells[1])
     const points = Number(cells[2])
@@ -60,7 +60,10 @@ export function parseVrsStandings(markdown: string, options: { region?: string; 
     const base = normalizeTeamName(name)
     const key = seen.has(base) ? `${base}#${rank}` : base
     seen.add(base)
-    entries.push({ key, rank, name, points, roster })
+    const url = (cell?: string) => (cell && /^https?:\/\//.test(cell) ? cell : undefined)
+    const logoUrl = url(cells[6])
+    const logoUrlLight = logoUrl && url(cells[7])
+    entries.push({ key, rank, name, points, roster, ...(logoUrl && { logoUrl }), ...(logoUrlLight && { logoUrlLight }) })
   }
   if (entries.length === 0) throw new Error("This doesn't look like a VRS standings file")
   const region = options.region ?? 'global'
@@ -80,12 +83,30 @@ export function matchTeams(teams: Team[], catalog: Catalog): Map<TeamId, Catalog
   )
 }
 
-/** Links a team to an entry, taking its rating; null removes the link and keeps the rating. */
+const host = (url: string) => {
+  try {
+    return new URL(url).host
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Gives a team a ranking's logo. A team with no logo, or one from the same
+ * site (an earlier copy of the ranking), takes it; a logo set by hand stays.
+ */
+export function takeLogo(team: Team, from: Pick<CatalogEntry, 'logoUrl' | 'logoUrlLight'>): Team {
+  if (!from.logoUrl || (team.logoUrl && host(team.logoUrl) !== host(from.logoUrl))) return team
+  const { logoUrlLight: _, ...rest } = team
+  return { ...rest, logoUrl: from.logoUrl, ...(from.logoUrlLight && { logoUrlLight: from.logoUrlLight }) }
+}
+
+/** Links a team to an entry, taking its rating (and logo, see takeLogo); null removes the link and keeps both. */
 export function linkTeam(tournament: Tournament, teamId: TeamId, entry: CatalogEntry | null, catalog: Catalog): Tournament {
   const team = tournament.teams[teamId]
   if (!team) return tournament
   const next: Team = entry
-    ? { ...team, rating: entry.points, ratingSource: { catalog: catalog.source, key: entry.key, rank: entry.rank, asOf: catalog.asOf } }
+    ? takeLogo({ ...team, rating: entry.points, ratingSource: { catalog: catalog.source, key: entry.key, rank: entry.rank, asOf: catalog.asOf } }, entry)
     : { ...team, ratingSource: undefined }
   return { ...tournament, teams: { ...tournament.teams, [teamId]: next } }
 }

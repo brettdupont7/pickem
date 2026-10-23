@@ -55,7 +55,11 @@
       const rank = text(t.querySelector('.position')).replace(/\D/g, '');
       const points = (text(t.querySelector('.points')).match(/\d+/) || [''])[0];
       const players = [...t.querySelectorAll('.rankingNicknames span')].map((s) => cell(s.textContent));
-      return '| ' + rank + ' | ' + points + ' | ' + cell(t.querySelector('.name')?.textContent) + ' | ' + players.join(', ') + ' | |';
+      // Logos come in dark- and light-theme versions or just one; HLTV's placeholder is a relative link.
+      const logo = (img) => (/^https:\/\//.test(img?.getAttribute('src') || '') ? cell(img.getAttribute('src')) : '');
+      const dark = logo(t.querySelector('.team-logo img.night-only') || t.querySelector('.team-logo img'));
+      const light = logo(t.querySelector('.team-logo img.day-only'));
+      return '| ' + rank + ' | ' + points + ' | ' + cell(t.querySelector('.name')?.textContent) + ' | ' + players.join(', ') + ' | | ' + dark + ' | ' + light + ' |';
     });
     const markdown = [
       "# Pick'em VRS import",
@@ -64,8 +68,8 @@
       '',
       date ? 'Standings as of ' + date : '',
       '',
-      '| Standing | Points | Team Name | Roster | |',
-      '| --- | --- | --- | --- | --- |',
+      '| Standing | Points | Team Name | Roster | | Logo | Light logo |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
       ...rows,
     ].join('\n');
     return { markdown, count: rows.length, date: date && date.replace(/_/g, '-') };

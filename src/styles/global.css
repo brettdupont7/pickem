@@ -584,8 +584,7 @@ input[type='number'] {
 }
 
 .web-cell__team .team-badge {
-  width: 28px;
-  height: 28px;
+  --badge-size: 28px;
   font-size: 10px;
 }
 
@@ -736,8 +735,8 @@ input[type='number'] {
 
 .team-badge {
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: var(--badge-size, 38px);
+  height: var(--badge-size, 38px);
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -748,7 +747,26 @@ input[type='number'] {
   font-weight: 700;
   letter-spacing: -0.02em;
   transition: opacity 0.15s, box-shadow 0.15s;
-  object-fit: cover;
+}
+
+/*
+ * The whole logo fits in the square inside the circle (sides 1/√2 of its
+ * width). The circle is a wrapper: a rounded, padded image would also be
+ * clipped to a smaller inner circle.
+ */
+.team-badge--logo {
+  padding: calc(var(--badge-size, 38px) * 0.15);
+}
+
+.team-badge--logo picture {
+  display: contents;
+}
+
+.team-badge--logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .team-badge--unknown {
@@ -846,8 +864,7 @@ input[type='number'] {
 }
 
 .placings__list .team-badge {
-  width: 28px;
-  height: 28px;
+  --badge-size: 28px;
   font-size: 10px;
 }
 
@@ -1588,8 +1605,7 @@ input[type='number'] {
 }
 
 .pickem__table .team-badge {
-  width: 28px;
-  height: 28px;
+  --badge-size: 28px;
 }
 
 .pickem__choices button:disabled:not(.is-active) {
@@ -1659,8 +1675,7 @@ input[type='number'] {
 }
 
 .pickem__pick .team-badge {
-  width: 24px;
-  height: 24px;
+  --badge-size: 24px;
 }
 
 .pickem__pick:disabled {

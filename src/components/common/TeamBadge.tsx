@@ -11,9 +11,23 @@ export function initials(team: Team) {
     .slice(0, 4)
 }
 
-/** A team's logo, or its initials in a circle; "?" when the team isn't known yet. */
+/** A team's logo (its light version in light mode), or its initials in a circle; "?" when the team isn't known yet. */
 export function TeamBadge({ team }: { team?: Team }) {
-  if (team?.logoUrl) return <img className="team-badge" src={team.logoUrl} alt="" />
+  if (team?.logoUrl) {
+    const img = <img src={team.logoUrl} alt="" />
+    return (
+      <span className="team-badge team-badge--logo" aria-hidden>
+        {team.logoUrlLight ? (
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcSet={team.logoUrlLight} />
+            {img}
+          </picture>
+        ) : (
+          img
+        )}
+      </span>
+    )
+  }
   return (
     <span className={`team-badge${team ? '' : ' team-badge--unknown'}`} aria-hidden>
       {team ? initials(team) : '?'}

@@ -241,7 +241,7 @@ export function TeamsPanel() {
                     value={team.logoUrl ?? ''}
                     placeholder="https://…"
                     aria-label={`${team.name} logo URL`}
-                    onChange={(e) => patch(team.id, { logoUrl: e.target.value || undefined })}
+                    onChange={(e) => patch(team.id, { logoUrl: e.target.value || undefined, logoUrlLight: undefined })}
                   />
                 </td>
                 <td>

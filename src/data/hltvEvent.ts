@@ -1,4 +1,4 @@
-import { addTeams, linkTeam, matchTeams, slugify, uniqueId, uniqueName } from '../engine'
+import { addTeams, linkTeam, matchTeams, slugify, takeLogo, uniqueId, uniqueName } from '../engine'
 import type {
   BestOf,
   Catalog,
@@ -446,14 +446,16 @@ export function updateTeamsFromHltv(tournament: Tournament, event: HltvEvent, vr
       const old = teams[target[j]]
       const same = old.name === source.name
       if (!same) changed++
-      teams[old.id] = tidy({
+      const team = tidy({
         id: old.id,
         name: source.name,
         shortName: same ? old.shortName : undefined,
         logoUrl: same ? old.logoUrl : undefined,
+        logoUrlLight: same ? old.logoUrlLight : undefined,
         rating: source.rating ?? (same ? old.rating : undefined),
         ratingSource: source.ratingSource ?? (same ? old.ratingSource : undefined),
       })
+      teams[old.id] = takeLogo(team, source)
     })
   })
   const total = to.reduce((n, s) => n + invitedSlots(s).length, 0)

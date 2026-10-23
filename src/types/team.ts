@@ -5,6 +5,8 @@ export interface Team {
   name: string
   shortName?: string
   logoUrl?: string
+  /** Shown instead of `logoUrl` in light mode. */
+  logoUrlLight?: string
   /** Strength used by the simulator (e.g. an Elo-style rating). */
   rating?: number
   /** The ranking entry `rating` was taken from, if any. */

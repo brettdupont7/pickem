@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tournament } from '../types'
-import { addFromCatalog, linkTeam, matchTeams, normalizeTeamName, parseVrsStandings, seedByRank, updateRatings } from './catalog'
+import { addFromCatalog, linkTeam, matchTeams, normalizeTeamName, parseVrsStandings, seedByRank, takeLogo, updateRatings } from './catalog'
 
 // Same layout as Valve's standings files, with made-up teams.
 const standings = (date: string, rows: [number, number, string, string][]) =>
@@ -67,6 +67,36 @@ describe('matching teams', () => {
   it('keeps an existing link', () => {
     const t = linkTeam(tournament({ b: { name: 'Bravo' } }), 'b', october.entries[4], october)
     expect(matchTeams(Object.values(t.teams), october).get('b')?.rank).toBe(5)
+  })
+})
+
+describe('logos from a catalog', () => {
+  const cdn = (name: string) => `https://cdn.example/${name}.png?s=1`
+  const withLogos = parseVrsStandings(
+    '### Standings as of 2026_10_16\n| Standing | Points | Team Name | Roster | | Logo | Light logo |\n| --- | --- | --- | --- | --- | --- | --- |\n' +
+      `| 1 | 2000 | Alpha | a1 | | ${cdn('a')} | ${cdn('a-light')} |\n| 2 | 1900 | Bravo | b1 | | ${cdn('b')} | |\n| 3 | 1800 | Charlie | c1 | | | |`,
+  )
+
+  it('reads logo columns when a standings file has them', () => {
+    expect(withLogos.entries.map((e) => [e.logoUrl, e.logoUrlLight])).toEqual([
+      [cdn('a'), cdn('a-light')],
+      [cdn('b'), undefined],
+      [undefined, undefined],
+    ])
+    expect(october.entries[0].logoUrl).toBeUndefined()
+  })
+
+  it('gives linked teams the logo unless theirs was set by hand', () => {
+    const t = tournament({ a: { name: 'Alpha' }, b: { name: 'Bravo', logoUrl: 'https://mine.example/b.png' } })
+    const linked = [0, 1].reduce((next, i) => linkTeam(next, 'ab'[i], withLogos.entries[i], withLogos), t)
+    expect(linked.teams.a).toMatchObject({ logoUrl: cdn('a'), logoUrlLight: cdn('a-light') })
+    expect(linked.teams.b.logoUrl).toBe('https://mine.example/b.png')
+  })
+
+  it("replaces a logo from the same site, dropping a light version the new one doesn't have", () => {
+    const team = { id: 'a', name: 'Alpha', logoUrl: cdn('old'), logoUrlLight: cdn('old-light') }
+    expect(takeLogo(team, { logoUrl: cdn('new') })).toEqual({ id: 'a', name: 'Alpha', logoUrl: cdn('new') })
+    expect(takeLogo(team, {})).toBe(team)
   })
 })
 

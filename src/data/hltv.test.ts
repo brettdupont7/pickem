@@ -4,12 +4,17 @@ import { HLTV_BOOKMARKLET_HREF, HLTV_BOOKMARKLET_SOURCE, parseHltvImport } from 
 
 // Just enough of HLTV's ranking page for the bookmarklet, with made-up teams.
 const el = (text = '') => ({ textContent: text, style: {}, append() {}, addEventListener() {}, remove() {}, select() {} })
-const team = (rank: number, points: number, name: string, players: string[]) => {
-  const parts: Record<string, ReturnType<typeof el>> = {
+const img = (src: string) => ({ ...el(), getAttribute: (a: string) => (a === 'src' ? src : null) })
+/** `logos` mimics HLTV: dark and light versions, a single logo, or the placeholder (a relative link). */
+const team = (rank: number, points: number, name: string, players: string[], logos: { dark?: string; light?: string; only?: string } = {}) => {
+  const parts: Record<string, object> = {
     '.position': el(`#${rank}`),
     '.points': el(`(${points} Valve points)`),
     '.name': el(name),
+    '.team-logo img': img(logos.light ?? logos.only ?? '/dynamic-svg/teamplaceholder?name=x'),
   }
+  if (logos.dark) parts['.team-logo img.night-only'] = img(logos.dark)
+  if (logos.light) parts['.team-logo img.day-only'] = img(logos.light)
   return {
     querySelector: (s: string) => parts[s] ?? null,
     querySelectorAll: (s: string) => (s === '.rankingNicknames span' ? players.map((p) => el(p)) : []),
@@ -41,9 +46,10 @@ async function runBookmarklet(pathname: string, teams: ReturnType<typeof team>[]
   return { copied, toast }
 }
 
+const LOGO = 'https://img-cdn.hltv.org/teamlogo/'
 const teams = [
-  team(1, 1983, 'Alpha', ['a1', 'a2', 'a3', 'a4', 'a5']),
-  team(2, 1943, 'Natus Vincere', ['n1', 'n2', 'n3', 'n4', 'n5']),
+  team(1, 1983, 'Alpha', ['a1', 'a2', 'a3', 'a4', 'a5'], { dark: `${LOGO}a-dark.png?ixlib=x&w=50&s=1`, light: `${LOGO}a-light.png?ixlib=x&w=50&s=2` }),
+  team(2, 1943, 'Natus Vincere', ['n1', 'n2', 'n3', 'n4', 'n5'], { only: `${LOGO}navi.svg?ixlib=x&s=3` }),
   team(3, 1200, 'Alpha', ['x1', 'x2', 'x3', 'x4', 'x5']),
 ]
 
@@ -65,6 +71,15 @@ describe('HLTV bookmarklet', () => {
       ['alpha#3', 3, 1200, 'Alpha'],
     ])
     expect(vrs.entries[1].roster).toEqual(['n1', 'n2', 'n3', 'n4', 'n5'])
+  })
+
+  it("copies each team's logo, with its light version if it has one, and skips HLTV's placeholder", async () => {
+    const vrs = parseHltvImport((await runBookmarklet('/valve-ranking/teams/2026/october/16', teams)).copied)
+    expect(vrs.entries.map((e) => [e.logoUrl, e.logoUrlLight])).toEqual([
+      [`${LOGO}a-dark.png?ixlib=x&w=50&s=1`, `${LOGO}a-light.png?ixlib=x&w=50&s=2`],
+      [`${LOGO}navi.svg?ixlib=x&s=3`, undefined],
+      [undefined, undefined],
+    ])
   })
 
   it('reads the region and, without a date in the address, the date from the heading', async () => {

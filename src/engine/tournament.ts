@@ -16,7 +16,7 @@ import { computeDoubleElim } from './double-elim'
 import { bestOfError } from './results'
 import { FREE_SCORING } from './rules'
 import { computeSingleElim } from './single-elim'
-import { computeSwiss, DEFAULT_RATING, type SwissState } from './swiss'
+import { computeSwiss, DEFAULT_RATING, drawnRoundsIssue, type SwissState } from './swiss'
 
 export type StageStatus = 'waiting' | 'in-progress' | 'complete' | 'invalid'
 
@@ -257,6 +257,8 @@ export function validateTournament(tournament: Tournament): TournamentIssue[] {
     const config = stage.config
     if (config.format === 'swiss' && (config.winsToAdvance < 1 || config.lossesToEliminate < 1))
       issue('Wins to advance and losses to eliminate must be at least 1')
+    const draw = config.format === 'swiss' ? drawnRoundsIssue(config, stage.entrants.length) : undefined
+    if (draw) issue(draw)
     for (const bestOf of bestOfsIn(config)) {
       if (bestOf != null && bestOfError(bestOf)) issue(`Best-of ${bestOf} must be an odd number`)
     }

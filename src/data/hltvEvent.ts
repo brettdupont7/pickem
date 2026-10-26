@@ -1,4 +1,4 @@
-import { addTeams, linkTeam, matchTeams, slugify, takeLogo, uniqueId, uniqueName } from '../engine'
+import { addTeams, drawnRoundsIssue, linkTeam, matchTeams, slugify, takeLogo, uniqueId, uniqueName } from '../engine'
 import type {
   BestOf,
   Catalog,
@@ -54,7 +54,7 @@ export interface HltvRound {
 
 export interface HltvBracket {
   name: string
-  /** HLTV's bracket type, e.g. 'SingleElimination' or 'DoubleElimination4' (a GSL group). */
+  /** HLTV's bracket type, e.g. 'SingleElimination' or 'DoubleElimination4' (a GSL group), in either case. */
   type: string
   rounds: HltvRound[]
 }
@@ -161,6 +161,15 @@ function swissConfig(page: HltvPage, swiss: HltvSwiss, assumed: string[]): Swiss
   })
 }
 
+/** HLTV's opening matches as pairs of seeds, when it names every team and each is one of the stage's entrants. */
+function drawnFirstRound(swiss: HltvSwiss, entrants: EntrantSource[], teams: Tournament['teams'], config: SwissConfig): SwissConfig | undefined {
+  const seedOf = new Map(entrants.flatMap((e, i) => (e.kind === 'team' ? [[teams[e.teamId].name.toLowerCase(), i + 1] as const] : [])))
+  const pairs = swiss.firstRound.map((m) => m.map((t) => (t ? seedOf.get(t.toLowerCase()) : undefined)))
+  if (pairs.some((p) => p.length !== 2 || p.some((s) => s === undefined))) return undefined
+  const drawn: SwissConfig = { ...config, drawnRounds: { 0: pairs as [number, number][] } }
+  return drawnRoundsIssue(drawn, entrants.length) ? undefined : drawn
+}
+
 /** Single elimination: size and round names from the bracket, best-ofs from scheduled matches or Formats. */
 function singleElimConfig(page: HltvPage, bracket: HltvBracket, thirdPlaceMatch: boolean): { config: SingleElimConfig; size: number } {
   const rounds = bracket.rounds
@@ -216,13 +225,15 @@ interface PagePlan {
 }
 
 function planPage(page: HltvPage): PagePlan {
-  const single = page.brackets.filter((b) => b.type === 'SingleElimination')
+  // HLTV has written types both as 'SingleElimination' and 'singleElimination'.
+  const is = (b: HltvBracket, type: string) => b.type.toLowerCase() === type.toLowerCase()
+  const single = page.brackets.filter((b) => is(b, 'SingleElimination'))
   const matchCount = (b: HltvBracket) => b.rounds.reduce((n, r) => n + r.matches.length, 0)
   const third =
     single.find((b) => /3rd|third/i.test(b.name)) ?? (single.length > 1 ? single.find((b) => matchCount(b) === 1) : undefined)
   const playoffs = single.filter((b) => b !== third)
-  const groups = page.brackets.filter((b) => b.type === 'DoubleElimination4')
-  const other = page.brackets.find((b) => b.type !== 'SingleElimination' && b.type !== 'DoubleElimination4')
+  const groups = page.brackets.filter((b) => is(b, 'DoubleElimination4'))
+  const other = page.brackets.find((b) => !is(b, 'SingleElimination') && !is(b, 'DoubleElimination4'))
   const title = pageTitle(page)
   if (other) throw new Unsupported(`${title}: HLTV's "${other.name || other.type}" bracket (${other.type}) isn't supported yet.`)
   if (page.swiss.length > 1) throw new Unsupported(`${title} has more than one Swiss stage, which isn't supported yet.`)
@@ -324,12 +335,16 @@ export function buildFromHltvEvent(event: HltvEvent, vrs: Catalog | null): Event
     const stages: Stage[] = []
     let first: StageId[] = []
     if (plan.swiss) {
-      const config = swissConfig(page, plan.swiss, designNotes)
       const stageName = base || page.formats.find(([, t]) => /^swiss/i.test(t))?.[0] || 'Swiss stage'
       const expected = plan.swiss.firstRound.length * 2
       while (expected && entrants.length < expected) entrants.push({ kind: 'team', teamId: placeholder('') })
       if (expected && entrants.length > expected)
         teamNotes.push(`${stageName}: HLTV lists ${entrants.length} teams for a ${expected}-team Swiss stage; all were entered.`)
+      // Seeds stay in VRS order; a published draw only sets the opening matches.
+      const seeded = swissConfig(page, plan.swiss, designNotes)
+      const drawn = drawnFirstRound(plan.swiss, entrants, tournament.teams, seeded)
+      if (drawn) designNotes.push(`${stageName}: the first round uses HLTV's draw.`)
+      const config = drawn ?? seeded
       const id = newStageId(stageName)
       stages.push({ id, name: stageName, phase, config, entrants })
       first = [id]
@@ -425,6 +440,7 @@ const invitingStages = (tournament: Tournament) =>
  * Puts the event's teams into an existing tournament's invited slots, stage
  * by stage in play order, keeping its design. Each slot's team keeps its ID
  * (so picks stay with the slot) and takes the event team's name and rating.
+ * A Swiss stage of only invited teams also takes HLTV's draw, if it has one.
  */
 export function updateTeamsFromHltv(tournament: Tournament, event: HltvEvent, vrs: Catalog | null): EventImport {
   const built = buildFromHltvEvent(event, vrs)
@@ -458,10 +474,20 @@ export function updateTeamsFromHltv(tournament: Tournament, event: HltvEvent, vr
       teams[old.id] = takeLogo(team, source)
     })
   })
+  const draws = new Map<StageId, SwissConfig>()
+  from.forEach((stage, i) => {
+    const target = to[i]
+    const draw = stage.config.format === 'swiss' ? stage.config.drawnRounds?.[0] : undefined
+    if (!draw || target.config.format !== 'swiss') return
+    if (target.entrants.some((e) => e.kind !== 'team') || target.entrants.length !== stage.entrants.length) return
+    draws.set(target.id, { ...target.config, drawnRounds: { ...target.config.drawnRounds, 0: draw } })
+  })
+  const stages = draws.size ? tournament.stages.map((s) => (draws.has(s.id) ? { ...s, config: draws.get(s.id)! } : s)) : tournament.stages
   const total = to.reduce((n, s) => n + invitedSlots(s).length, 0)
+  const drawNote = [...draws.keys()].map((id) => `${tournament.stages.find((s) => s.id === id)!.name}: the first round now uses HLTV's draw.`)
   return {
-    tournament: { ...tournament, teams },
-    notes: [`Updated ${total} invited teams (${changed} changed).`, ...built.teamNotes],
+    tournament: { ...tournament, teams, stages },
+    notes: [`Updated ${total} invited teams (${changed} changed).`, ...drawNote, ...built.teamNotes],
     teamNotes: built.teamNotes,
   }
 }

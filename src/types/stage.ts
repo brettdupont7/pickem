@@ -103,6 +103,13 @@ export interface SwissConfig {
   /** Used when a loss would eliminate the team (e.g. 0-2, 1-2, 2-2 in a 3/3 Swiss). */
   eliminationBestOf?: BestOf
   firstRoundPairing: SwissFirstRoundPairing
+  /**
+   * Rounds whose matches are set by hand instead of by the pairing rules
+   * (e.g. an event's published draw), by 0-based round: pairs of seeds (1 is
+   * the first entrant). A round is played as set only while it pairs exactly
+   * the teams playing it, bar one left out to take the bye.
+   */
+  drawnRounds?: Record<number, [number, number][]>
   pairing: SwissPairing
   avoidRematches: boolean
   tiebreakers: SwissTiebreaker[]

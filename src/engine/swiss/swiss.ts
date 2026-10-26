@@ -39,6 +39,8 @@ export interface SwissState {
    * will advance isn't fixed yet.
    */
   places: Record<TeamId, [number, number]>
+  /** Rounds set by hand (`drawnRounds`) that don't pair the teams playing them, so the rules paired them. */
+  unfitDraws: number[]
 }
 
 interface TeamRecord {
@@ -203,6 +205,7 @@ function computeRounds({ seeds, config, results, randomSeed = 0, scoring, rating
 
   const rounds: Match[][] = []
   const upcoming: SwissState['upcoming'] = {}
+  const unfitDraws: number[] = []
   // Each round every active team gains a win or a loss, so this bounds the stage.
   const maxRounds = winsToAdvance + lossesToEliminate - 1
 
@@ -211,11 +214,14 @@ function computeRounds({ seeds, config, results, randomSeed = 0, scoring, rating
     if (active.length === 0) break
 
     const matches: Match[] = []
+    const drawn = drawnPairs(config.drawnRounds?.[round], active, seeds)
+    if (config.drawnRounds?.[round] && !drawn) unfitDraws.push(round)
 
     if (active.length % 2 === 1) {
-      // The lowest-ranked team that hasn't had a bye sits out and takes a win.
+      // The team a hand-set round leaves out, or else the lowest-ranked team
+      // that hasn't had a bye, sits out and takes a win.
       const ranked = [...active].sort(compareRank).reverse()
-      const byeTeam = ranked.find((id) => rec(id).byes === 0) ?? ranked[0]
+      const byeTeam = drawn?.bye ?? ranked.find((id) => rec(id).byes === 0) ?? ranked[0]
       active = active.filter((id) => id !== byeTeam)
       matches.push({
         id: byeMatchId(byeTeam, round),
@@ -230,7 +236,8 @@ function computeRounds({ seeds, config, results, randomSeed = 0, scoring, rating
 
     const roundRng = createRng(randomSeed + (round + 1) * 0x9e3779b9)
     const pairs =
-      round === 0
+      drawn?.pairs ??
+      (round === 0
         ? pairFirstRound(active, config, roundRng)
         : pairByRecord(active, config, {
             rec,
@@ -240,7 +247,7 @@ function computeRounds({ seeds, config, results, randomSeed = 0, scoring, rating
             played: config.avoidRematches ? played : () => false,
             rng: roundRng,
             round,
-          })
+          }))
 
     for (const [a, b] of pairs) {
       const key = swissMatchId(a, b)
@@ -310,33 +317,90 @@ function computeRounds({ seeds, config, results, randomSeed = 0, scoring, rating
     ranking: [...seeds].sort(compareRank),
     complete: seeds.every((id) => statusOf(id) !== 'active'),
     upcoming,
+    unfitDraws,
   }
 }
 
 function validate(seeds: TeamId[], config: SwissConfig) {
   if (seeds.length < 2) throw new Error('Swiss stage needs at least 2 teams')
   if (new Set(seeds).size !== seeds.length) throw new Error('Swiss stage has duplicate teams')
+  const draw = drawnRoundsIssue(config, seeds.length)
+  if (draw) throw new Error(draw)
   if (!Number.isInteger(config.winsToAdvance) || config.winsToAdvance < 1)
     throw new Error('winsToAdvance must be a positive integer')
   if (!Number.isInteger(config.lossesToEliminate) || config.lossesToEliminate < 1)
     throw new Error('lossesToEliminate must be a positive integer')
 }
 
+/**
+ * Why a stage of `teams` teams can't use its rounds set by hand, or
+ * undefined if it can. Later rounds depend on results, so only round 1 must
+ * name every team (bar one with the bye).
+ */
+export function drawnRoundsIssue(config: SwissConfig, teams: number): string | undefined {
+  for (const [key, pairs] of Object.entries(config.drawnRounds ?? {})) {
+    const round = Number(key)
+    const seeds = pairs.flat()
+    const valid = seeds.every((s) => Number.isInteger(s) && s >= 1 && s <= teams) && new Set(seeds).size === seeds.length
+    if (!valid) return `Round ${round + 1}'s matchups must use seeds 1 to ${teams}, each at most once`
+    if (round === 0 && seeds.length !== teams - (teams % 2)) return `Round 1's matchups must pair all ${teams} teams`
+  }
+  return undefined
+}
+
+/** A hand-set round as pairs of teams, if it pairs every team in `active` but the one it leaves out for the bye. */
+function drawnPairs(draw: [number, number][] | undefined, active: TeamId[], seeds: TeamId[]): { pairs: Pair[]; bye?: TeamId } | undefined {
+  if (!draw) return undefined
+  const pairs = draw.map(([a, b]): Pair => [seeds[a - 1], seeds[b - 1]])
+  const drawnTeams = new Set(pairs.flat())
+  const left = active.filter((id) => !drawnTeams.has(id))
+  if (left.length !== active.length % 2 || drawnTeams.size !== active.length - left.length) return undefined
+  return { pairs, bye: left[0] }
+}
+
+/** Each team's record ("1-0") going into `round` (0-based), for the teams playing it. */
+export function recordsBefore(rounds: Match[][], round: number): Record<TeamId, string> {
+  const wins = new Map<TeamId, number>()
+  const losses = new Map<TeamId, number>()
+  const add = (count: Map<TeamId, number>, id: TeamId) => count.set(id, (count.get(id) ?? 0) + 1)
+  // Rounds are only paired once the one before is finished, so these all have results.
+  for (const m of rounds.slice(0, round).flat()) {
+    const winner = m.result?.winnerId
+    if (!winner) continue
+    add(wins, winner)
+    const loser = m.slots.find((s) => s.teamId && s.teamId !== winner)?.teamId
+    if (loser) add(losses, loser)
+  }
+  const ids = (rounds[round] ?? []).flatMap((m) => m.slots.flatMap((s) => (s.teamId ? [s.teamId] : [])))
+  return Object.fromEntries(ids.map((id) => [id, `${wins.get(id) ?? 0}-${losses.get(id) ?? 0}`]))
+}
+
+/**
+ * A round's matchups with teams `a` and `b` swapped, as pairs of seeds for
+ * `drawnRounds`. A team swapped with the one that has the bye takes the bye.
+ */
+export function swapTeams(round: Match[], seeds: TeamId[], a: TeamId, b: TeamId): [number, number][] {
+  const seedOf = new Map(seeds.map((id, i) => [id, i + 1]))
+  const swap = (id: TeamId | null) => (id === a ? b : id === b ? a : id)
+  return round.flatMap((m): [number, number][] => {
+    const [x, y] = m.slots.map((s) => swap(s.teamId))
+    return x && y ? [[seedOf.get(x)!, seedOf.get(y)!]] : []
+  })
+}
+
+/** First-round matches as pairs of seeds (1-based) for the pairings that follow from seed order. */
+function seedPairs(teams: number, pairing: 'high-low' | 'fold' | 'adjacent'): [number, number][] {
+  const half = teams / 2
+  return Array.from({ length: Math.floor(half) }, (_, i): [number, number] =>
+    pairing === 'high-low' ? [i + 1, i + 1 + half] : pairing === 'fold' ? [i + 1, teams - i] : [2 * i + 1, 2 * i + 2],
+  )
+}
+
 /** `active` is in seed order and has an even length. */
 function pairFirstRound(active: TeamId[], config: SwissConfig, rng: () => number): Pair[] {
-  const n = active.length
-  const half = n / 2
-  const pairs: Pair[] = []
   const { firstRoundPairing } = config
-  if (firstRoundPairing === 'high-low') {
-    for (let i = 0; i < half; i++) pairs.push([active[i], active[i + half]])
-  } else if (firstRoundPairing === 'fold') {
-    for (let i = 0; i < half; i++) pairs.push([active[i], active[n - 1 - i]])
-  } else {
-    const order = firstRoundPairing === 'random' ? shuffle(active, rng) : active
-    for (let i = 0; i < n; i += 2) pairs.push([order[i], order[i + 1]])
-  }
-  return pairs
+  const order = firstRoundPairing === 'random' ? shuffle(active, rng) : active
+  return seedPairs(order.length, firstRoundPairing === 'random' ? 'adjacent' : firstRoundPairing).map(([a, b]) => [order[a - 1], order[b - 1]])
 }
 
 interface PairingContext {

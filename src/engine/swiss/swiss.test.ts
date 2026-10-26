@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Match, MatchResult, SwissConfig, TeamId } from '../../types'
 import { createRng } from '../random'
-import { computeSwiss, pairByMajorTable, startingRatings, type SwissState } from './swiss'
+import { computeSwiss, drawnRoundsIssue, pairByMajorTable, recordsBefore, startingRatings, swapTeams, type SwissState } from './swiss'
 
 const cs2Swiss: SwissConfig = {
   format: 'swiss',
@@ -80,6 +80,67 @@ describe('computeSwiss', () => {
     const state = computeSwiss({ seeds: teams(16), config: { ...cs2Swiss, firstRoundPairing }, results: {} })
     const pairs = state.rounds[0].map((m) => m.slots.map((s) => s.teamId))
     for (const pair of expected) expect(pairs).toContainEqual(pair)
+  })
+
+  const pairsOf = (round: Match[]) => round.filter((m) => m.slots[1].teamId).map((m) => m.slots.map((s) => s.teamId))
+  const asTeams = (pairs: [number, number][]) => pairs.map(([a, b]) => [`t${a}`, `t${b}`])
+
+  it('pairs round 1 as drawn, keeping seed order for the rest of the stage', () => {
+    const draw: [number, number][] = [[5, 12], [9, 16], [3, 7], [2, 13], [1, 10], [6, 11], [8, 14], [4, 15]]
+    const config: SwissConfig = { ...cs2Swiss, drawnRounds: { 0: draw } }
+    const state = computeSwiss({ seeds: teams(16), config, results: {} })
+    expect(pairsOf(state.rounds[0])).toEqual(asTeams(draw))
+    expect(playOut(teams(16), config, higherSeedWins).complete).toBe(true)
+  })
+
+  it('plays a later round as set by hand while it pairs the teams playing it', () => {
+    const results: Record<string, MatchResult> = {}
+    for (const m of computeSwiss({ seeds: teams(8), config: cs2Swiss, results }).rounds[0]) results[m.id] = { winnerId: higherSeedWins(m, teams(8)), source: 'actual' }
+    // Winners t1-t4, losers t5-t8; the rules would pair 1v4 2v3 and 5v8 6v7.
+    const draw: [number, number][] = [[1, 3], [2, 4], [5, 7], [6, 8]]
+    const config: SwissConfig = { ...cs2Swiss, drawnRounds: { 1: draw } }
+    const state = computeSwiss({ seeds: teams(8), config, results })
+    expect(pairsOf(state.rounds[1])).toEqual(asTeams(draw))
+    expect(state.unfitDraws).toEqual([])
+
+    // Matchups that leave out a team playing the round fall back to the rules.
+    const missing = computeSwiss({ seeds: teams(8), config: { ...cs2Swiss, drawnRounds: { 1: draw.slice(1) } }, results })
+    expect(pairsOf(missing.rounds[1])).toEqual(asTeams([[1, 4], [2, 3], [5, 8], [6, 7]]))
+    expect(missing.unfitDraws).toEqual([1])
+  })
+
+  it('gives the bye to the team a hand-set round leaves out', () => {
+    const state = computeSwiss({ seeds: teams(5), config: { ...cs2Swiss, drawnRounds: { 0: [[1, 4], [3, 5]] } }, results: {} })
+    expect(pairsOf(state.rounds[0])).toEqual(asTeams([[1, 4], [3, 5]]))
+    expect(state.rounds[0].find((m) => m.result?.source === 'bye')?.slots[0].teamId).toBe('t2')
+  })
+
+  it('swaps two teams in a round, moving the bye with them', () => {
+    const results: Record<string, MatchResult> = {}
+    const first = computeSwiss({ seeds: teams(8), config: cs2Swiss, results })
+    for (const m of first.rounds[0]) results[m.id] = { winnerId: higherSeedWins(m, teams(8)), source: 'actual' }
+    const { rounds } = computeSwiss({ seeds: teams(8), config: cs2Swiss, results })
+    expect(recordsBefore(rounds, 1)).toMatchObject({ t1: '1-0', t4: '1-0', t5: '0-1' })
+    // 1v4 2v3 5v8 6v7, with t3 and t4 swapped.
+    const swapped = swapTeams(rounds[1], teams(8), 't3', 't4')
+    expect(swapped).toEqual([[1, 3], [2, 4], [5, 8], [6, 7]])
+    expect(pairsOf(computeSwiss({ seeds: teams(8), config: { ...cs2Swiss, drawnRounds: { 1: swapped } }, results }).rounds[1])).toEqual(asTeams(swapped))
+
+    const odd = computeSwiss({ seeds: teams(5), config: cs2Swiss, results: {} }).rounds[0]
+    const bye = odd.find((m) => m.result?.source === 'bye')!.slots[0].teamId!
+    const playing = odd.find((m) => m.slots[1].teamId)!.slots[0].teamId!
+    expect(swapTeams(odd, teams(5), bye, playing).flat()).not.toContain(Number(playing.slice(1)))
+  })
+
+  it('refuses matchups that miss or repeat a seed', () => {
+    const drawn = (round: number, pairs: [number, number][]): SwissConfig => ({ ...cs2Swiss, drawnRounds: { [round]: pairs } })
+    expect(drawnRoundsIssue(drawn(0, [[1, 2], [3, 4]]), 4)).toBeUndefined()
+    expect(drawnRoundsIssue(drawn(0, [[1, 2]]), 3)).toBeUndefined()
+    expect(drawnRoundsIssue(drawn(0, [[1, 2], [3, 3]]), 4)).toBe("Round 1's matchups must use seeds 1 to 4, each at most once")
+    expect(drawnRoundsIssue(drawn(2, [[1, 5]]), 4)).toBe("Round 3's matchups must use seeds 1 to 4, each at most once")
+    expect(drawnRoundsIssue(drawn(0, [[1, 2]]), 4)).toBe("Round 1's matchups must pair all 4 teams")
+    expect(drawnRoundsIssue(drawn(1, [[1, 2]]), 4)).toBeUndefined()
+    expect(() => computeSwiss({ seeds: teams(4), config: drawn(0, [[1, 2]]), results: {} })).toThrow('must pair all 4 teams')
   })
 
   it('plays a 16-team 3/3 stage like a CS2 Major', () => {

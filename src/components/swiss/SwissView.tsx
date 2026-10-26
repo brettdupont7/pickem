@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import type { ComputedStage } from '../../engine'
-import { useTeams } from '../common/preview'
+import { recordsBefore, swapTeams, updateStage, type ComputedStage } from '../../engine'
+import { useTournamentStore } from '../../store/tournament'
+import { useIsPreview, useTeams } from '../common/preview'
 import type { Match, Stage, SwissConfig, Team, TeamId } from '../../types'
 import { MatchCard, PlaceholderRow } from '../common/MatchCard'
 import { TeamBadge } from '../common/TeamBadge'
@@ -67,6 +68,8 @@ function matchesByRecord(round: Match[] | undefined) {
 
 export function SwissView({ stage, computed }: { stage: Stage; computed: ComputedStage }) {
   const teams = useTeams()
+  const preview = useIsPreview()
+  const updateTournament = useTournamentStore((s) => s.updateTournament)
   const config = stage.config as SwissConfig
   const swiss = computed.swiss!
   const seeds = computed.seeds ?? []
@@ -78,6 +81,31 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
   const cellRefs = useRef(new Map<string, HTMLElement>())
   const [arrows, setArrows] = useState<Arrow[]>([])
   const [size, setSize] = useState({ width: 0, height: 0 })
+  /** The round whose matchups are being rearranged, and the team picked up to swap. */
+  const [editing, setEditing] = useState<number | null>(null)
+  const [held, setHeld] = useState<TeamId | null>(null)
+  const records = editing === null ? {} : recordsBefore(swiss.rounds, editing)
+
+  const setDrawnRound = (round: number, pairs: [number, number][] | undefined) =>
+    updateTournament((t) =>
+      updateStage(t, stage.id, (s) => {
+        const { drawnRounds, ...rest } = s.config as SwissConfig
+        const next = { ...drawnRounds }
+        if (pairs) next[round] = pairs
+        else delete next[round]
+        return { ...s, config: Object.keys(next).length ? { ...rest, drawnRounds: next } : rest }
+      }),
+    )
+  // Only teams with the same record going into the round can trade places.
+  const canSwap = (a: TeamId | null, b: TeamId) => a !== null && a !== b && records[a] === records[b]
+  const swap = (a: TeamId, b: TeamId) => {
+    setHeld(null)
+    if (editing !== null && canSwap(a, b)) setDrawnRound(editing, swapTeams(swiss.rounds[editing], seeds, a, b))
+  }
+  const toggleEditing = (round: number) => {
+    setHeld(null)
+    setEditing(editing === round ? null : round)
+  }
 
   /** Teams decided in the round being played, headed for this record (best-ranked first). */
   const upcomingAt = (wins: number, losses: number): TeamId[] =>
@@ -167,7 +195,9 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
           )}
         </div>
         {matches.map((m) =>
-          m.slots[1].isBye ? (
+          editing === cell.wins + cell.losses ? (
+            <EditRow key={m.id} match={m} teams={teams} held={held} canSwap={canSwap} onHold={setHeld} onSwap={swap} />
+          ) : m.slots[1].isBye ? (
             <div key={m.id} className="match match--row match--bye">
               <span className="match__team" title={teams[m.slots[0].teamId!]?.name}>
                 <TeamBadge team={teams[m.slots[0].teamId!]} />
@@ -232,6 +262,17 @@ export function SwissView({ stage, computed }: { stage: Stage; computed: Compute
       </svg>
       {columns.map((column, c) => (
         <div key={c} className="swiss-web__column">
+          {!preview && (
+            <RoundHeader
+              round={c}
+              paired={!!swiss.rounds[c]}
+              drawn={!!config.drawnRounds?.[c]}
+              unfit={swiss.unfitDraws.includes(c)}
+              editing={editing === c}
+              onToggle={() => toggleEditing(c)}
+              onReset={() => setDrawnRound(c, undefined)}
+            />
+          )}
           <div className="swiss-web__top">{column.filter((x) => x.kind === 'advanced').map(renderFinished)}</div>
           <div className="swiss-web__middle">{column.filter((x) => x.kind === 'active').map(renderActive)}</div>
           <div className="swiss-web__bottom">{column.filter((x) => x.kind === 'eliminated').map(renderFinished)}</div>
@@ -254,6 +295,104 @@ function ArrivingRow({ teams }: { teams: (Team | undefined)[] }) {
       <span className="match__team" title={teams[1]?.name ?? 'To be decided'}>
         <TeamBadge team={teams[1]} />
       </span>
+    </div>
+  )
+}
+
+interface RoundHeaderProps {
+  round: number
+  /** Whether the round's matches exist yet; they're paired once the round before finishes. */
+  paired: boolean
+  drawn: boolean
+  unfit: boolean
+  editing: boolean
+  onToggle: () => void
+  onReset: () => void
+}
+
+/** Above a round's column: whether its matchups were set by hand, and the button to rearrange them. */
+function RoundHeader({ round, paired, drawn, unfit, editing, onToggle, onReset }: RoundHeaderProps) {
+  return (
+    <div className="swiss-web__header">
+      {paired && (
+        <>
+          <button
+            className={`button button--small${editing ? ' is-active' : ''}`}
+            aria-pressed={editing}
+            onClick={onToggle}
+            title={editing ? 'Stop rearranging' : 'Rearrange matchups: drag a team onto another with the same record, or click one then the other'}
+          >
+            {editing ? 'Done' : `Edit round ${round + 1}`}
+          </button>
+          {editing && drawn && (
+            <button className="button button--small button--ghost" onClick={onReset} title="Pair this round by the stage's pairing rules again">
+              Reset
+            </button>
+          )}
+          {drawn && (
+            <span
+              className="badge badge--stale"
+              title={
+                unfit
+                  ? "These matchups set by hand aren't the teams playing this round with the current results, so the pairing rules set it."
+                  : 'Matchups set by hand'
+              }
+            >
+              {unfit ? 'Not used' : 'By hand'}
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+interface EditRowProps {
+  match: Match
+  teams: Record<TeamId, Team>
+  held: TeamId | null
+  canSwap: (a: TeamId | null, b: TeamId) => boolean
+  onHold: (id: TeamId | null) => void
+  onSwap: (a: TeamId, b: TeamId) => void
+}
+
+/** A match while its round is being rearranged: teams can be swapped, not picked. */
+function EditRow({ match, teams, held, canSwap, onHold, onSwap }: EditRowProps) {
+  const slot = (id: TeamId | null) => {
+    if (!id) return <span />
+    const target = canSwap(held, id)
+    const name = teams[id]?.name ?? id
+    return (
+      <button
+        className={`match__team${held === id ? ' is-held' : ''}${target ? ' is-target' : ''}`}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', id)
+          e.dataTransfer.effectAllowed = 'move'
+          onHold(id)
+        }}
+        onDragEnd={() => onHold(null)}
+        onDragOver={(e) => target && e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (held) onSwap(held, id)
+        }}
+        onClick={() => (target ? onSwap(held!, id) : onHold(held === id ? null : id))}
+        title={target ? `Swap with ${name}` : held === id ? `${name} — click another team with the same record to swap` : name}
+      >
+        <span className="match__badge">
+          <TeamBadge team={teams[id]} />
+        </span>
+      </button>
+    )
+  }
+  return (
+    <div className="match match--row match--editing">
+      {slot(match.slots[0].teamId)}
+      <div className="match__center">
+        <span className="match__vs">{match.slots[1].teamId ? 'vs' : 'bye'}</span>
+      </div>
+      {slot(match.slots[1].teamId)}
     </div>
   )
 }

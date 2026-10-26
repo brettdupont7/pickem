@@ -132,6 +132,12 @@ describe('buildFromHltvEvent: a Major', () => {
     })
   })
 
+  it("reads bracket types in either case (HLTV now writes 'singleElimination')", () => {
+    const lower = structuredClone(major)
+    for (const p of lower.pages) for (const b of p.brackets) b.type = b.type[0].toLowerCase() + b.type.slice(1)
+    expect(buildFromHltvEvent(lower, vrs).tournament).toEqual(tournament)
+  })
+
   it('rates teams from current VRS and notes predictions and teams without a rating', () => {
     const s3 = Object.values(tournament.teams).find((t) => t.name === 'S3-1')!
     expect(s3).toMatchObject({ rating: 2000, ratingSource: { catalog: 'vrs', rank: 1, asOf: '2026-10-16' } })
@@ -158,6 +164,35 @@ describe('buildFromHltvEvent: a Major', () => {
     expect(teamNames(built.tournament, built.tournament.stages[2].entrants).slice(0, 8)).toEqual([...names('S3-', 8).slice(1), 'TBD · VRS Europe'])
     expect(built.notes).toContain("1 slot has no team yet, so it's a placeholder named TBD.")
     expect(built.notes).toContain('No VRS ranking was copied, so teams have no ratings. Import VRS, then use Link teams to VRS.')
+  })
+})
+
+describe('buildFromHltvEvent: a Swiss stage with a published draw', () => {
+  // Like PGL Masters Bucharest 2026: the draw doesn't follow seed order.
+  const slots = names('T', 6).map((n, i) => team(n, i + 1))
+  const drawn = (firstRound: (string | null)[][]) =>
+    event(page({ name: 'Test Masters', formats: [['Group stage', 'Swiss Bo3']], swiss: [{ titles: SWISS_TITLES, firstRound }], slots }))
+  const opening = (t: Tournament) => computeTournament(t, {}).stages[t.stages[0].id].matches.filter((m) => m.round === 0).map((m) => m.slots.map((s) => t.teams[s.teamId!].name))
+
+  it('plays HLTV\'s opening matches and keeps teams seeded by VRS rank', () => {
+    const { tournament, notes } = buildFromHltvEvent(drawn([['T3', 'T5'], ['T1', 'T6'], ['T2', 'T4']]), null)
+    const stage = tournament.stages[0]
+    expect(stage.config).toMatchObject({ firstRoundPairing: 'high-low', drawnRounds: { 0: [[3, 5], [1, 6], [2, 4]] } })
+    expect(stage.entrants.map((e) => e.kind === 'team' && tournament.teams[e.teamId].name)).toEqual(names('T', 6))
+    expect(opening(tournament)).toEqual([['T3', 'T5'], ['T1', 'T6'], ['T2', 'T4']])
+    expect(notes).toContain("Group stage: the first round uses HLTV's draw.")
+  })
+
+  it('pairs by seed while the draw has a team still to be decided', () => {
+    const { tournament } = buildFromHltvEvent(drawn([['T3', 'T5'], ['T1', null], ['T2', 'T4']]), null)
+    expect(tournament.stages[0].config).not.toHaveProperty('drawnRounds')
+  })
+
+  it('brings the draw into an existing tournament when updating its teams', () => {
+    const before = buildFromHltvEvent(drawn([['T1', 'T4'], ['T2', 'T5'], ['T3', 'T6']].map(() => [null, null])), null).tournament
+    const { tournament, notes } = updateTeamsFromHltv(before, drawn([['T3', 'T5'], ['T1', 'T6'], ['T2', 'T4']]), null)
+    expect(opening(tournament)).toEqual([['T3', 'T5'], ['T1', 'T6'], ['T2', 'T4']])
+    expect(notes).toContain("Group stage: the first round now uses HLTV's draw.")
   })
 })
 

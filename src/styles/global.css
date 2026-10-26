@@ -521,6 +521,24 @@ input[type='number'] {
   flex: none;
 }
 
+.swiss-web__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.button--small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .swiss-web__middle {
   flex: 1;
   display: flex;
@@ -596,6 +614,27 @@ input[type='number'] {
 }
 
 /* Row match (Swiss) */
+
+/* A round being rearranged: teams are picked up and swapped, not picked to win. */
+.match--editing {
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
+  border-radius: var(--radius);
+}
+
+.match--editing .match__team {
+  cursor: grab;
+}
+
+.match--editing .match__team.is-held .team-badge {
+  box-shadow: 0 0 0 2px var(--accent);
+  opacity: 0.6;
+}
+
+.match--editing .match__team.is-target .team-badge {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 
 .match--row {
   position: relative;

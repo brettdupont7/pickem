@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { computeTournament, instantiate, parseVrsStandings, validateTournament } from '../engine'
-import type { EntrantSource, Tournament } from '../types'
+import { computeStageIn, computeTournament, instantiate, parseVrsStandings, validateTournament, type ComputedStage } from '../engine'
+import type { EntrantSource, Stage, TeamId, Tournament } from '../types'
 import { buildFromHltvEvent, isHltvEvent, parseHltvEvent, updateTeamsFromHltv, type HltvBracket, type HltvEvent, type HltvPage, type HltvSlot } from './hltvEvent'
 import { cs2Major, groupsPlayoffs } from './presets'
 
@@ -76,6 +76,7 @@ const vrs = parseVrsStandings(
     .join('\n'),
 )
 
+const invitedIds = (stage: Stage) => stage.entrants.flatMap((e): TeamId[] => (e.kind === 'team' ? [e.teamId] : []))
 const teamNames = (t: Tournament, entrants: EntrantSource[]) =>
   entrants.map((e) => (e.kind === 'team' ? t.teams[e.teamId].name : `${e.stageId}#${e.place}`))
 
@@ -245,10 +246,88 @@ describe('buildFromHltvEvent: GSL groups into playoffs', () => {
   })
 })
 
+describe('buildFromHltvEvent: 8-team double-elimination groups into playoffs with byes', () => {
+  // As at IEM Beijing 2026: no consolidation or grand final, so the upper final
+  // decides 1st and 2nd and the lower final 3rd. Winners skip the quarter-finals.
+  const group = (name: string, teams: string[]): HltvBracket => ({
+    name,
+    type: 'doubleElimination8',
+    rounds: [
+      { key: 'upperRound1', name: 'Opening round', matches: [0, 2, 4, 6].map((i) => match(teams[i], teams[i + 1], 3)) },
+      { key: 'upperRound2', name: 'Upper semi-finals', matches: [match(), match()] },
+      { key: 'upperFinal', name: 'Upper final', matches: [match()] },
+      { key: 'lowerRound1', name: 'Lower round 1', matches: [match(), match()] },
+      { key: 'lowerDropdown1', name: 'Lower semi-finals', matches: [match(), match()] },
+      { key: 'lowerRound2', name: 'Lower final', matches: [match()] },
+      { key: 'consolidationFinal', name: 'Consolidation final', matches: [match(null, null, null, true)] },
+      { key: 'grandFinal', name: 'Grand final', matches: [match(null, null, null, true)] },
+    ],
+  })
+  const playoffs: HltvBracket = {
+    name: 'Single Elimination Bracket',
+    type: 'singleElimination',
+    rounds: [
+      { key: 'round1', name: 'Quarter-finals', matches: [match(null, null, null, true), match(), match(null, null, null, true), match()] },
+      { key: 'round2', name: 'Semi-finals', matches: [match(), match()] },
+      { key: 'round3', name: 'Grand final', matches: [match(null, null, 5)] },
+    ],
+  }
+  const e = event(
+    page({
+      name: 'Test Beijing 2026',
+      formats: [
+        ['Group stage', 'Double elimination Bo3\n- Group winners advance to the playoff semi-finals;\n- The 2nd and 3rd placed teams go to the playoff quarter-finals.'],
+        ['Playoffs', 'Single elimination Bo3\n- Grand final Bo5\n3rd place decider match Bo3'],
+      ],
+      brackets: [playoffs, single('3rd Place Decider Match', ['Tiebreaker', 1]), group('Group A', names('A', 8)), group('Group B', names('B', 8))],
+      slots: [...names('A', 8), ...names('B', 8)].map((n, i) => team(n, i + 1, 'VRS (Global)')),
+    }),
+  )
+
+  it('builds each group so the upper final decides 1st and 2nd, and takes the top 3 into a 6-team playoff', () => {
+    const { tournament } = buildFromHltvEvent(e, null)
+    expect(validateTournament(tournament)).toEqual([])
+    const [a, b, final] = tournament.stages
+    expect([a.name, b.name, final.name, final.phase]).toEqual(['Group A', 'Group B', 'Playoffs', 1])
+    expect(teamNames(tournament, a.entrants)).toEqual(names('A', 8))
+    expect(a.config).toEqual({
+      format: 'double-elim',
+      bestOf: 3,
+      upperRoundNamesFromFinal: ['Upper final', 'Upper semi-finals', 'Opening round'],
+      lowerRoundNamesFromFinal: ['Lower final', 'Lower semi-finals', 'Lower round 1'],
+      seeding: 'as-listed',
+      finals: 'upper-final-decides',
+      grandFinalReset: false,
+    })
+    // Group winners are the top two seeds, so they take the byes.
+    expect(teamNames(tournament, final.entrants)).toEqual(['group-a#1', 'group-b#1', 'group-a#2', 'group-b#2', 'group-a#3', 'group-b#3'])
+    expect(final.config).toMatchObject({ bestOf: 3, bestOfFromFinal: [5], thirdPlaceMatch: true })
+    const state = computeTournament(tournament, {})
+    expect(state.stages[a.id].matches.filter((m) => m.side === 'lower').map((m) => m.label)).toEqual([
+      'Lower round 1',
+      'Lower round 1',
+      'Lower semi-finals',
+      'Lower semi-finals',
+      'Lower final',
+    ])
+    // With the groups finished in seed order, 2nd and 3rd cross over.
+    const finished = (stage: Stage): ComputedStage => ({ ...state.stages[stage.id], status: 'complete', ranking: invitedIds(stage) })
+    const bracket = computeStageIn(tournament, final, { [a.id]: finished(a), [b.id]: finished(b) }, {})
+    const quarters = bracket.matches.filter((m) => m.round === 0 && m.side !== 'third-place')
+    // Group winners take the byes, where HLTV hides the quarter-finals.
+    expect(quarters.map((m) => m.slots.map((s) => s.teamId && tournament.teams[s.teamId].name))).toEqual([
+      ['A1', null],
+      ['B2', 'A3'],
+      ['B1', null],
+      ['A2', 'B3'],
+    ])
+  })
+})
+
 describe('buildFromHltvEvent: unsupported formats', () => {
   it('says what it cannot build', () => {
-    const e = event(page({ name: 'Test Cup', brackets: [{ name: 'Group A', type: 'DoubleElimination8', rounds: [] }] }))
-    expect(() => buildFromHltvEvent(e, null)).toThrow(`Can't build this event yet. Test Cup: HLTV's "Group A" bracket (DoubleElimination8) isn't supported yet.`)
+    const e = event(page({ name: 'Test Cup', brackets: [{ name: 'Group A', type: 'RoundRobin', rounds: [] }] }))
+    expect(() => buildFromHltvEvent(e, null)).toThrow(`Can't build this event yet. Test Cup: HLTV's "Group A" bracket (RoundRobin) isn't supported yet.`)
     const none = event(page({ name: 'Test Cup', formats: [['Group stage', 'Round robin Bo1']] }))
     expect(() => buildFromHltvEvent(none, null)).toThrow('HLTV lists the format as "Group stage: Round robin Bo1"')
   })

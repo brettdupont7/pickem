@@ -54,7 +54,7 @@ export interface HltvRound {
 
 export interface HltvBracket {
   name: string
-  /** HLTV's bracket type, e.g. 'SingleElimination' or 'DoubleElimination4' (a GSL group), in either case. */
+  /** HLTV's bracket type, e.g. 'SingleElimination', 'DoubleElimination4' (a GSL group) or 'doubleElimination8', in either case. */
   type: string
   rounds: HltvRound[]
 }
@@ -177,12 +177,15 @@ function singleElimConfig(page: HltvPage, bracket: HltvBracket, thirdPlaceMatch:
   const base = bestOfIn(lines[0]) ?? mostCommon(rounds.flatMap((r) => r.matches.map((m) => m.bo))) ?? 3
   // "- Grand final Bo5" applies to the round named "Grand final".
   const lineFor = (round: HltvRound) => lines.slice(1).find((l) => round.name && l.toLowerCase().includes(round.name.toLowerCase()))
+  // A hidden first-round match is a bye: one team goes straight to the next round.
+  const opening = rounds[0]?.matches ?? []
+  const byes = opening.every((m) => m.hidden) ? 0 : opening.filter((m) => m.hidden).length
   const fromFinal = [...rounds].reverse().map((r) => mostCommon(r.matches.map((m) => m.bo)) ?? bestOfIn(lineFor(r)) ?? base)
   let keep = fromFinal.length
   while (keep > 0 && fromFinal[keep - 1] === base) keep--
   const names = [...rounds].reverse().map((r) => r.name)
   return {
-    size: (rounds[0]?.matches.length ?? 0) * 2,
+    size: opening.length * 2 - byes,
     config: tidy({
       format: 'single-elim',
       bestOf: base,
@@ -194,23 +197,29 @@ function singleElimConfig(page: HltvPage, bracket: HltvBracket, thirdPlaceMatch:
   }
 }
 
-/** A GSL group: 4-team double elimination where the winners' match decides 1st and the decider 2nd. */
-function gslConfig(page: HltvPage, group: HltvBracket, drawn: boolean): DoubleElimConfig {
+/**
+ * A double-elimination group, e.g. a GSL group (4 teams: the winners' match
+ * decides 1st and the decider 2nd) or an 8-team group. A hidden grand final
+ * means the lower winner places 2nd; a hidden consolidation final too means
+ * the upper final's loser doesn't drop, so the upper final decides 1st and 2nd.
+ */
+function doubleElimConfig(page: HltvPage, group: HltvBracket, drawn: boolean): DoubleElimConfig {
   const round = (key: string) => group.rounds.find((r) => r.key === key)
+  const played = (r: HltvRound | undefined) => !!r && r.matches.some((m) => !m.hidden)
   const lines = formatText(page, /^(gsl|double elim)/i)?.split('\n') ?? []
   const bestOf = mostCommon(group.rounds.flatMap((r) => r.matches.map((m) => m.bo))) ?? bestOfIn(lines[0]) ?? 3
-  const grandFinal = round('grandFinal')
-  const names = (...keys: string[]) => {
-    const list = keys.map((k) => round(k)?.name ?? '')
-    return list.every(Boolean) ? list : undefined
-  }
+  const finals = !played(round('consolidationFinal')) ? 'upper-final-decides' : !played(round('grandFinal')) ? 'no-grand-final' : 'grand-final'
+  // HLTV lists rounds in play order; the lower bracket ends in the consolidation final when it's played.
+  const names = (rounds: HltvRound[]) => (rounds.every((r) => r.name) ? rounds.map((r) => r.name).reverse() : undefined)
+  const upper = group.rounds.filter((r) => r.key.startsWith('upper'))
+  const lower = group.rounds.filter((r) => r.key.startsWith('lower') || (r.key === 'consolidationFinal' && played(r)))
   return tidy({
     format: 'double-elim',
     bestOf,
-    upperRoundNamesFromFinal: names('upperFinal', 'upperRound1'),
-    lowerRoundNamesFromFinal: names('consolidationFinal', 'lowerRound1'),
+    upperRoundNamesFromFinal: names(upper),
+    lowerRoundNamesFromFinal: names(lower),
     seeding: drawn ? 'as-listed' : 'standard',
-    finals: !grandFinal || grandFinal.matches.every((m) => m.hidden) ? 'no-grand-final' : 'grand-final',
+    finals,
     grandFinalReset: false,
   })
 }
@@ -232,8 +241,10 @@ function planPage(page: HltvPage): PagePlan {
   const third =
     single.find((b) => /3rd|third/i.test(b.name)) ?? (single.length > 1 ? single.find((b) => matchCount(b) === 1) : undefined)
   const playoffs = single.filter((b) => b !== third)
-  const groups = page.brackets.filter((b) => is(b, 'DoubleElimination4'))
-  const other = page.brackets.find((b) => !is(b, 'SingleElimination') && !is(b, 'DoubleElimination4'))
+  // 'DoubleElimination4' is a GSL group; 'doubleElimination8' an 8-team group.
+  const isGroup = (b: HltvBracket) => /^doubleElimination\d+$/i.test(b.type)
+  const groups = page.brackets.filter(isGroup)
+  const other = page.brackets.find((b) => !is(b, 'SingleElimination') && !isGroup(b))
   const title = pageTitle(page)
   if (other) throw new Unsupported(`${title}: HLTV's "${other.name || other.type}" bracket (${other.type}) isn't supported yet.`)
   if (page.swiss.length > 1) throw new Unsupported(`${title} has more than one Swiss stage, which isn't supported yet.`)
@@ -355,7 +366,7 @@ export function buildFromHltvEvent(event: HltvEvent, vrs: Catalog | null): Event
       const opening = (g: HltvBracket) => g.rounds.find((r) => r.key === 'upperRound1')?.matches.flatMap((m) => [m.team1, m.team2]) ?? []
       const drawn = plan.groups.every((g) => {
         const teams = opening(g)
-        return teams.length === 4 && teams.every((t) => t && named.has(t.toLowerCase()))
+        return teams.length >= 4 && teams.every((t) => t && named.has(t.toLowerCase()))
       })
       // Undrawn groups take teams in seed order, snaking: A B B A A B B A...
       const groupEntrants: EntrantSource[][] = plan.groups.map(() => [])
@@ -371,7 +382,7 @@ export function buildFromHltvEvent(event: HltvEvent, vrs: Catalog | null): Event
       plan.groups.forEach((g, i) => {
         const stageName = g.name || `Group ${String.fromCharCode(65 + i)}`
         const id = newStageId(stageName)
-        stages.push({ id, name: stageName, phase, config: gslConfig(page, g, drawn), entrants: groupEntrants[i] })
+        stages.push({ id, name: stageName, phase, config: doubleElimConfig(page, g, drawn), entrants: groupEntrants[i] })
         first.push(id)
       })
     }
